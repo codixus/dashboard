@@ -121,6 +121,11 @@
   * {
     @apply border-border outline-ring/50;
     }
+  html,
+  body,
+  #root {
+    @apply min-h-svh w-full;
+    }
   body {
     @apply bg-background text-foreground;
     }
