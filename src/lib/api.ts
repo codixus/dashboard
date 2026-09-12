@@ -5,6 +5,9 @@ import type {
   CollectionDoc,
   PushDelivery,
   PushDevice,
+  PushJourney,
+  PushJourneyDefinition,
+  PushSendResult,
 } from "@/lib/types"
 
 export const DEFAULT_API_URL = "http://localhost:3001/oknok"
@@ -25,7 +28,9 @@ export class ApiError extends Error {
 export function getApiUrl(): string {
   const raw = import.meta.env.VITE_API_URL
   const value =
-    typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : DEFAULT_API_URL
+    typeof raw === "string" && raw.trim().length > 0
+      ? raw.trim()
+      : DEFAULT_API_URL
   return value.replace(/\/+$/, "")
 }
 
@@ -267,17 +272,82 @@ export async function sendPush(input: {
   deviceId: string
   title: string
   body: string
+  imageUrl?: string
   data?: Record<string, unknown>
-}): Promise<void> {
-  await adminJson("/admin/push/send", {
+}): Promise<PushSendResult[]> {
+  const result = await adminJson<PushSendResult[]>("/admin/push/send", {
     method: "POST",
     body: JSON.stringify(input),
   })
+  return result.data ?? []
 }
 
-export async function listDeliveries(deviceId: string): Promise<PushDelivery[]> {
+export async function listDeliveries(
+  deviceId: string
+): Promise<PushDelivery[]> {
   const result = await adminJson<PushDelivery[]>(
     withQuery("/admin/push/deliveries", { deviceId })
+  )
+  return result.data ?? []
+}
+
+export async function listJourneys(): Promise<PushJourney[]> {
+  const result = await adminJson<PushJourney[]>("/admin/push/journeys")
+  return result.data ?? []
+}
+
+export async function createJourney(input: {
+  name: string
+  definition: PushJourneyDefinition
+}): Promise<PushJourney> {
+  const result = await adminJson<PushJourney>("/admin/push/journeys", {
+    method: "POST",
+    body: JSON.stringify(input),
+  })
+  return result.data
+}
+
+export async function updateJourneyDraft(
+  journeyId: string,
+  input: { name: string; definition: PushJourneyDefinition }
+): Promise<PushJourney> {
+  const result = await adminJson<PushJourney>(
+    `/admin/push/journeys/${encodeURIComponent(journeyId)}`,
+    { method: "PATCH", body: JSON.stringify(input) }
+  )
+  return result.data
+}
+
+async function transitionJourney(
+  journeyId: string,
+  action: "publish" | "pause" | "resume"
+): Promise<PushJourney> {
+  const result = await adminJson<PushJourney>(
+    `/admin/push/journeys/${encodeURIComponent(journeyId)}/${action}`,
+    { method: "POST" }
+  )
+  return result.data
+}
+
+export function publishJourney(journeyId: string): Promise<PushJourney> {
+  return transitionJourney(journeyId, "publish")
+}
+
+export function pauseJourney(journeyId: string): Promise<PushJourney> {
+  return transitionJourney(journeyId, "pause")
+}
+
+export function resumeJourney(journeyId: string): Promise<PushJourney> {
+  return transitionJourney(journeyId, "resume")
+}
+
+export async function testJourneyStep(
+  journeyId: string,
+  input: { deviceId: string; stepId: string }
+): Promise<PushSendResult[]> {
+  const result = await adminJson<PushSendResult[]>(
+    `/admin/push/journeys/${encodeURIComponent(journeyId)}/test`,
+    { method: "POST", body: JSON.stringify(input) }
   )
   return result.data ?? []
 }

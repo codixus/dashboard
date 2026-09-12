@@ -61,6 +61,7 @@ export function PushPage() {
   const [selected, setSelected] = useState<PushDevice | null>(null)
   const [title, setTitle] = useState("")
   const [body, setBody] = useState("")
+  const [imageUrl, setImageUrl] = useState("")
   const [dataText, setDataText] = useState(EMPTY_OBJECT)
   const [sending, setSending] = useState(false)
   const [deliveries, setDeliveries] = useState<PushDelivery[] | null>(null)
@@ -102,7 +103,36 @@ export function PushPage() {
     if (!preset) {
       return
     }
-    void runSearch(preset)
+
+    let cancelled = false
+    async function loadPreset() {
+      setSearching(true)
+      try {
+        const rows = await searchDevices(preset)
+        if (cancelled) return
+        setDevices(rows)
+        if (rows.length === 1) {
+          const device = rows[0]
+          setSelected(device)
+          const recent = await listDeliveries(device.deviceId)
+          if (!cancelled) setDeliveries(recent)
+        } else {
+          setSelected(null)
+          setDeliveries(null)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          toast.error(err instanceof ApiError ? err.code : "REQUEST_FAILED")
+        }
+      } finally {
+        if (!cancelled) setSearching(false)
+      }
+    }
+
+    void loadPreset()
+    return () => {
+      cancelled = true
+    }
   }, [preset])
 
   async function onSearch() {
@@ -135,6 +165,7 @@ export function PushPage() {
       deviceId: string
       title: string
       body: string
+      imageUrl?: string
       data?: Record<string, unknown>
     } = {
       deviceId: selected.deviceId,
@@ -144,10 +175,33 @@ export function PushPage() {
     if (Object.keys(parsed.value).length > 0) {
       payload.data = parsed.value
     }
+    const nextImageUrl = imageUrl.trim()
+    if (nextImageUrl) {
+      try {
+        if (new URL(nextImageUrl).protocol !== "https:")
+          throw new Error("invalid")
+      } catch {
+        toast.error("Image URL must use HTTPS")
+        return
+      }
+      payload.imageUrl = nextImageUrl
+    }
 
     setSending(true)
     try {
-      await sendPush(payload)
+      const results = await sendPush(payload)
+      const submitted = results.filter((result) => result.status === "submitted")
+      if (submitted.length === 0) {
+        const failed = results.find(
+          (result) => result.status === "failed" || result.status === "skipped"
+        )
+        const code = failed?.errorCode ?? "SEND_FAILED"
+        toast.error(
+          failed?.errorMessage ? `${code}: ${failed.errorMessage}` : code
+        )
+        await loadDeliveries(selected.deviceId)
+        return
+      }
       toast.success("Push sent")
       await loadDeliveries(selected.deviceId)
     } catch (err) {
@@ -186,7 +240,11 @@ export function PushPage() {
                 placeholder="deviceId or token substring"
               />
               <InputGroupAddon align="inline-end">
-                <InputGroupButton type="submit" variant="ghost" disabled={searching}>
+                <InputGroupButton
+                  type="submit"
+                  variant="ghost"
+                  disabled={searching}
+                >
                   {searching ? <Spinner /> : "Search"}
                 </InputGroupButton>
               </InputGroupAddon>
@@ -216,7 +274,9 @@ export function PushPage() {
               <TableRow>
                 <TableHead>deviceId</TableHead>
                 <TableHead>platform</TableHead>
-                <TableHead className="hidden @lg/table:table-cell">enabled</TableHead>
+                <TableHead className="hidden @lg/table:table-cell">
+                  enabled
+                </TableHead>
                 <TableHead>token</TableHead>
               </TableRow>
             </TableHeader>
@@ -225,7 +285,9 @@ export function PushPage() {
                 <TableRow
                   key={device._id}
                   className="cursor-pointer"
-                  data-state={selected?._id === device._id ? "selected" : undefined}
+                  data-state={
+                    selected?._id === device._id ? "selected" : undefined
+                  }
                   tabIndex={0}
                   onClick={() => void onSelect(device)}
                   onKeyDown={(event) => {
@@ -235,7 +297,9 @@ export function PushPage() {
                     }
                   }}
                 >
-                  <TableCell className="font-medium">{device.deviceId}</TableCell>
+                  <TableCell className="font-medium">
+                    {device.deviceId}
+                  </TableCell>
                   <TableCell>{device.platform}</TableCell>
                   <TableCell className="hidden @lg/table:table-cell">
                     {device.enabled ? "true" : "false"}
@@ -286,6 +350,17 @@ export function PushPage() {
               disabled={!selected}
             />
           </Field>
+          <Field>
+            <FieldLabel htmlFor="push-image">Image URL</FieldLabel>
+            <Input
+              id="push-image"
+              type="url"
+              placeholder="https://..."
+              value={imageUrl}
+              onChange={(event) => setImageUrl(event.target.value)}
+              disabled={!selected}
+            />
+          </Field>
         </FieldGroup>
         <div>
           <Button type="submit" disabled={!selected || sending}>
@@ -315,19 +390,31 @@ export function PushPage() {
                   <TableHead>createdAt</TableHead>
                   <TableHead>title</TableHead>
                   <TableHead>status</TableHead>
-                  <TableHead className="hidden @lg/table:table-cell">errorCode</TableHead>
+                  <TableHead className="hidden @lg/table:table-cell">
+                    errorCode
+                  </TableHead>
+                  <TableHead className="hidden @xl/table:table-cell">
+                    details
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {deliveries.map((row) => (
                   <TableRow key={row._id}>
                     <TableCell>{formatCell(row.createdAt)}</TableCell>
-                    <TableCell className="max-w-64 truncate">{row.title}</TableCell>
+                    <TableCell className="max-w-64 truncate">
+                      {row.title}
+                    </TableCell>
                     <TableCell>
-                      <Badge variant={statusVariant(row.status)}>{row.status}</Badge>
+                      <Badge variant={statusVariant(row.status)}>
+                        {row.status}
+                      </Badge>
                     </TableCell>
                     <TableCell className="hidden text-muted-foreground @lg/table:table-cell">
                       {row.errorCode ?? ""}
+                    </TableCell>
+                    <TableCell className="hidden max-w-96 whitespace-normal text-muted-foreground @xl/table:table-cell">
+                      {row.errorMessage ?? ""}
                     </TableCell>
                   </TableRow>
                 ))}
