@@ -275,7 +275,14 @@ export function CollectionPage() {
       setCreateOpen(false)
       setCreateText(EMPTY_OBJECT)
       setSkip(0)
-      await reload()
+      const result = await listDocuments(name, {
+        filter: appliedFilter,
+        limit: PAGE_LIMIT,
+        skip: 0,
+      })
+      setDocs(result.docs)
+      setNextSkip(result.nextSkip)
+      setListError(null)
     } catch (err) {
       toast.error(err instanceof ApiError ? err.code : "REQUEST_FAILED")
     } finally {
@@ -447,8 +454,8 @@ export function CollectionPage() {
           <SheetHeader>
             <SheetTitle>Edit document</SheetTitle>
             <SheetDescription>
-              {name}
-              {editorDoc ? ` / ${documentId(editorDoc)}` : ""}
+              Updates keys in this JSON; omitted keys are kept.
+              {editorDoc ? ` ${name} / ${documentId(editorDoc)}` : ""}
             </SheetDescription>
           </SheetHeader>
           <div className="flex min-h-0 flex-1 flex-col px-4">
@@ -492,7 +499,10 @@ export function CollectionPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              onClick={() => void confirmDelete()}
+              onClick={(event) => {
+                event.preventDefault()
+                void confirmDelete()
+              }}
             >
               Delete
             </AlertDialogAction>
