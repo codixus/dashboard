@@ -16,6 +16,15 @@ export function prettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
 
+/** PATCH body must not $set `_id`; the id lives in the URL. */
+export function omitDocumentId(
+  doc: Record<string, unknown>
+): Record<string, unknown> {
+  const next = { ...doc }
+  delete next._id
+  return next
+}
+
 export function formatCell(value: unknown): string {
   if (value == null) {
     return ""

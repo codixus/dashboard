@@ -1,4 +1,5 @@
 import { clearAdminToken, getAdminToken } from "@/lib/auth"
+import { omitDocumentId } from "@/lib/json"
 import type {
   AdminCollectionInfo,
   CollectionDoc,
@@ -237,7 +238,7 @@ export async function patchDocument(
 ): Promise<CollectionDoc> {
   const result = await adminJson<CollectionDoc>(
     `/admin/collections/${encodeURIComponent(name)}/${encodeURIComponent(id)}`,
-    { method: "PATCH", body: JSON.stringify(doc) }
+    { method: "PATCH", body: JSON.stringify(omitDocumentId(doc)) }
   )
   return result.data
 }
