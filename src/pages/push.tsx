@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useSearchParams } from "react-router"
 import { SmartphoneIcon } from "lucide-react"
 import { toast } from "sonner"
 
@@ -21,6 +22,7 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group"
+import { PageHeader, TableScroll } from "@/components/page"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -51,7 +53,9 @@ function statusVariant(
 }
 
 export function PushPage() {
-  const [query, setQuery] = useState("")
+  const [searchParams] = useSearchParams()
+  const preset = searchParams.get("deviceId") ?? searchParams.get("user") ?? ""
+  const [query, setQuery] = useState(preset)
   const [devices, setDevices] = useState<PushDevice[] | null>(null)
   const [searching, setSearching] = useState(false)
   const [selected, setSelected] = useState<PushDevice | null>(null)
@@ -70,8 +74,8 @@ export function PushPage() {
     }
   }
 
-  async function onSearch() {
-    const q = query.trim()
+  async function runSearch(raw: string) {
+    const q = raw.trim()
     if (!q) {
       toast.error("Query is required")
       return
@@ -80,13 +84,29 @@ export function PushPage() {
     try {
       const rows = await searchDevices(q)
       setDevices(rows)
-      setSelected(null)
-      setDeliveries(null)
+      if (rows.length === 1) {
+        setSelected(rows[0])
+        await loadDeliveries(rows[0].deviceId)
+      } else {
+        setSelected(null)
+        setDeliveries(null)
+      }
     } catch (err) {
       toast.error(err instanceof ApiError ? err.code : "REQUEST_FAILED")
     } finally {
       setSearching(false)
     }
+  }
+
+  useEffect(() => {
+    if (!preset) {
+      return
+    }
+    void runSearch(preset)
+  }, [preset])
+
+  async function onSearch() {
+    await runSearch(query)
   }
 
   async function onSelect(device: PushDevice) {
@@ -142,13 +162,11 @@ export function PushPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-lg font-medium">Push</h1>
-        <p className="text-sm text-muted-foreground">
-          Search a registered device and send a single notification.
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Push"
+        description="Search a registered device and send a single notification."
+      />
 
       <form
         className="flex max-w-xl flex-col gap-2"
@@ -192,40 +210,44 @@ export function PushPage() {
       ) : null}
 
       {devices && devices.length > 0 ? (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>deviceId</TableHead>
-              <TableHead>platform</TableHead>
-              <TableHead>enabled</TableHead>
-              <TableHead>token</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {devices.map((device) => (
-              <TableRow
-                key={device._id}
-                className="cursor-pointer"
-                data-state={selected?._id === device._id ? "selected" : undefined}
-                tabIndex={0}
-                onClick={() => void onSelect(device)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault()
-                    void onSelect(device)
-                  }
-                }}
-              >
-                <TableCell className="font-medium">{device.deviceId}</TableCell>
-                <TableCell>{device.platform}</TableCell>
-                <TableCell>{device.enabled ? "true" : "false"}</TableCell>
-                <TableCell className="max-w-64 truncate text-muted-foreground">
-                  {device.token}
-                </TableCell>
+        <TableScroll>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>deviceId</TableHead>
+                <TableHead>platform</TableHead>
+                <TableHead className="hidden @lg/table:table-cell">enabled</TableHead>
+                <TableHead>token</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {devices.map((device) => (
+                <TableRow
+                  key={device._id}
+                  className="cursor-pointer"
+                  data-state={selected?._id === device._id ? "selected" : undefined}
+                  tabIndex={0}
+                  onClick={() => void onSelect(device)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault()
+                      void onSelect(device)
+                    }
+                  }}
+                >
+                  <TableCell className="font-medium">{device.deviceId}</TableCell>
+                  <TableCell>{device.platform}</TableCell>
+                  <TableCell className="hidden @lg/table:table-cell">
+                    {device.enabled ? "true" : "false"}
+                  </TableCell>
+                  <TableCell className="max-w-64 truncate text-muted-foreground">
+                    {device.token}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableScroll>
       ) : null}
 
       <form
@@ -286,30 +308,32 @@ export function PushPage() {
           </Empty>
         ) : null}
         {deliveries && deliveries.length > 0 ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>createdAt</TableHead>
-                <TableHead>title</TableHead>
-                <TableHead>status</TableHead>
-                <TableHead>errorCode</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {deliveries.map((row) => (
-                <TableRow key={row._id}>
-                  <TableCell>{formatCell(row.createdAt)}</TableCell>
-                  <TableCell className="max-w-64 truncate">{row.title}</TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariant(row.status)}>{row.status}</Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {row.errorCode ?? ""}
-                  </TableCell>
+          <TableScroll>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>createdAt</TableHead>
+                  <TableHead>title</TableHead>
+                  <TableHead>status</TableHead>
+                  <TableHead className="hidden @lg/table:table-cell">errorCode</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {deliveries.map((row) => (
+                  <TableRow key={row._id}>
+                    <TableCell>{formatCell(row.createdAt)}</TableCell>
+                    <TableCell className="max-w-64 truncate">{row.title}</TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant(row.status)}>{row.status}</Badge>
+                    </TableCell>
+                    <TableCell className="hidden text-muted-foreground @lg/table:table-cell">
+                      {row.errorCode ?? ""}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableScroll>
         ) : null}
       </div>
     </div>

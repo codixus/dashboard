@@ -46,19 +46,19 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-svh w-full min-w-0 flex-col bg-background md:flex-row">
-      <aside className="flex w-full shrink-0 flex-col justify-between gap-4 self-stretch bg-foreground px-5 py-6 text-background sm:px-8 md:min-h-svh md:w-[min(42%,28rem)] md:px-10 md:py-12">
+      <aside className="flex w-full shrink-0 flex-col justify-between gap-4 self-stretch bg-primary px-5 py-6 text-primary-foreground sm:px-8 md:min-h-svh md:w-[min(42%,28rem)] md:px-10 md:py-12">
         <div className="flex min-w-0 flex-col gap-2 md:gap-3">
-          <p className="text-[0.7rem] font-medium tracking-[0.22em] text-background/65 uppercase">
+          <p className="text-[0.7rem] font-medium tracking-[0.22em] text-primary-foreground/65 uppercase">
             Operator
           </p>
           <p className="text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">
             Codixus
           </p>
-          <p className="max-w-xs text-sm leading-6 text-background/70">
-            Collections and device push for one API.
+          <p className="max-w-xs text-sm leading-6 text-primary-foreground/70">
+            Overview, collections, and device push for one API.
           </p>
         </div>
-        <p className="truncate font-mono text-xs text-background/55 md:whitespace-normal md:break-all">
+        <p className="truncate font-mono text-xs text-primary-foreground/55 md:whitespace-normal md:break-all">
           {apiOrigin}
         </p>
       </aside>

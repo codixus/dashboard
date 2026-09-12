@@ -73,7 +73,7 @@ describe("operator dashboard", () => {
     await waitFor(() => {
       expect(sessionStorage.getItem(ADMIN_TOKEN_KEY)).toBe(TOKEN)
     })
-    expect(await screen.findByRole("heading", { name: "Collections" })).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument()
   })
 
   it("toasts on login 401 and does not write storage", async () => {
@@ -103,18 +103,25 @@ describe("operator dashboard", () => {
 
   it("fetches collections with X-Codixus-Admin against the API URL", async () => {
     sessionStorage.setItem(ADMIN_TOKEN_KEY, TOKEN)
-    fetchMock.mockResolvedValue(
-      json({
-        success: true,
-        data: [
-          {
-            name: "users",
-            fields: ["_id", "deviceId", "locale", "createdAt"],
-            kind: "users",
-          },
-        ],
-      })
-    )
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      if (url.pathname.endsWith("/admin/collections")) {
+        return json({
+          success: true,
+          data: [
+            {
+              name: "users",
+              fields: ["_id", "deviceId", "locale", "createdAt"],
+              kind: "users",
+            },
+          ],
+        })
+      }
+      if (url.pathname.endsWith("/admin/collections/users")) {
+        return json({ success: true, data: [USER_DOC] })
+      }
+      return json({ success: false, error: "NOT_FOUND" }, 404)
+    })
 
     renderApp("/")
 
@@ -125,6 +132,7 @@ describe("operator dashboard", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe(`${getApiUrl()}/admin/collections`)
     expect(new Headers(init.headers).get(ADMIN_HEADER)).toBe(TOKEN)
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument()
   })
 
   function mockUsersCollection(listed: Array<Record<string, unknown>>) {
@@ -341,7 +349,7 @@ describe("operator dashboard", () => {
 
     renderApp("/")
 
-    expect(await screen.findByRole("heading", { name: "Collections" })).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Sign out" }))
 
     expect(await screen.findByLabelText("Admin token")).toBeInTheDocument()
@@ -432,5 +440,145 @@ describe("operator dashboard", () => {
 
     expect(await screen.findByText("Push sent")).toBeInTheDocument()
     expect(await screen.findByText("submitted")).toBeInTheDocument()
+  })
+
+  it("lists collections on /collections, not as the home heading", async () => {
+    sessionStorage.setItem(ADMIN_TOKEN_KEY, TOKEN)
+    fetchMock.mockResolvedValue(
+      json({
+        success: true,
+        data: [
+          {
+            name: "users",
+            fields: ["_id", "deviceId", "locale", "createdAt"],
+            kind: "users",
+          },
+        ],
+      })
+    )
+
+    renderApp("/collections")
+
+    expect(await screen.findByRole("heading", { name: "Collections" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Overview" })).not.toBeInTheDocument()
+  })
+
+  it("does not N+1 every model on overview", async () => {
+    sessionStorage.setItem(ADMIN_TOKEN_KEY, TOKEN)
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      if (url.pathname.endsWith("/admin/collections")) {
+        return json({
+          success: true,
+          data: [
+            { name: "users", fields: ["_id"], kind: "users" },
+            { name: "push_devices", fields: ["_id"], kind: "push_devices" },
+            { name: "push_deliveries", fields: ["_id"], kind: "push_deliveries" },
+            { name: "notes", fields: ["_id"], kind: "model" },
+          ],
+        })
+      }
+      if (url.pathname.includes("/admin/collections/")) {
+        return json({ success: true, data: [] })
+      }
+      return json({ success: false, error: "NOT_FOUND" }, 404)
+    })
+
+    renderApp("/")
+    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.length).toBeGreaterThan(1)
+    })
+    const paths = fetchMock.mock.calls.map((call) => requestUrl(call[0] as RequestInfo).pathname)
+    expect(paths.filter((p) => p.endsWith("/admin/collections"))).toHaveLength(1)
+    expect(paths.some((p) => p.endsWith("/admin/collections/notes"))).toBe(false)
+    expect(paths.filter((p) => p.includes("/admin/collections/")).length).toBe(3)
+  })
+
+  it("opens a full-page lightbox from an image cell", async () => {
+    const user = userEvent.setup()
+    sessionStorage.setItem(ADMIN_TOKEN_KEY, TOKEN)
+    const imageUrl = "https://cdn.example.com/cover.png"
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = requestUrl(input)
+      if (url.pathname.endsWith("/admin/collections")) {
+        return json({
+          success: true,
+          data: [
+            {
+              name: "shots",
+              fields: ["_id", "image", "title"],
+              kind: "model",
+            },
+          ],
+        })
+      }
+      if (url.pathname.endsWith("/admin/collections/shots")) {
+        return json({
+          success: true,
+          data: [{ _id: "s1", image: imageUrl, title: "Cover" }],
+        })
+      }
+      return json({ success: false, error: "NOT_FOUND" }, 404)
+    })
+
+    renderApp("/collections/shots")
+    await user.click(await screen.findByRole("button", { name: "View image" }))
+    const dialog = await screen.findByRole("dialog", { name: "Image" })
+    expect(within(dialog).getByRole("img", { name: "image" })).toHaveAttribute(
+      "src",
+      imageUrl
+    )
+  })
+
+  it("syntax-colors JSON in the document editor", async () => {
+    const user = userEvent.setup()
+    sessionStorage.setItem(ADMIN_TOKEN_KEY, TOKEN)
+    mockUsersCollection([{ ...USER_DOC }])
+
+    renderApp("/collections/users")
+    await user.click(await screen.findByText("dev1"))
+    expect(await screen.findByLabelText("Document JSON")).toBeInTheDocument()
+    expect(document.querySelector('[data-token="key"]')).not.toBeNull()
+  })
+
+  it("sends the user to Push with deviceId from a users row action", async () => {
+    const user = userEvent.setup()
+    sessionStorage.setItem(ADMIN_TOKEN_KEY, TOKEN)
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      const method = init?.method ?? "GET"
+      const path = url.pathname
+
+      if (path.endsWith("/admin/collections") && method === "GET") {
+        return json({
+          success: true,
+          data: [
+            {
+              name: "users",
+              fields: ["_id", "deviceId", "locale", "createdAt"],
+              kind: "users",
+            },
+          ],
+        })
+      }
+      if (path.endsWith("/admin/collections/users") && method === "GET") {
+        return json({ success: true, data: [USER_DOC] })
+      }
+      if (url.href.includes("/admin/push/devices")) {
+        return json({ success: true, data: [DEVICE] })
+      }
+      if (url.href.includes("/admin/push/deliveries")) {
+        return json({ success: true, data: [] })
+      }
+      return json({ success: false, error: "NOT_FOUND" }, 404)
+    })
+
+    renderApp("/collections/users")
+    await user.click(await screen.findByRole("button", { name: "Send push" }))
+    expect(await screen.findByRole("heading", { name: "Push" })).toBeInTheDocument()
+    expect(screen.getByLabelText("Device query")).toHaveValue("dev1")
   })
 })

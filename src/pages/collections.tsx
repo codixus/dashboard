@@ -13,7 +13,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { Skeleton } from "@/components/ui/skeleton"
+import { EmptyNote, LoadingRows, PageHeader, TableScroll } from "@/components/page"
 import {
   Table,
   TableBody,
@@ -57,20 +57,14 @@ export function CollectionsPage() {
   }, [])
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-lg font-medium">Collections</h1>
-        <p className="text-sm text-muted-foreground">
-          Browse models, users, and push collections on this API.
-        </p>
-      </div>
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title="Collections"
+        description="Browse models, users, and push collections on this API."
+      />
 
       {collections == null && !error ? (
-        <div className="flex flex-col gap-2" aria-busy="true" aria-label="Loading collections">
-          <Skeleton className="h-8 w-full" />
-          <Skeleton className="h-8 w-full" />
-          <Skeleton className="h-8 w-full" />
-        </div>
+        <LoadingRows label="Loading collections" />
       ) : null}
 
       {error ? (
@@ -86,53 +80,45 @@ export function CollectionsPage() {
       ) : null}
 
       {collections && collections.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <DatabaseIcon />
-            </EmptyMedia>
-            <EmptyTitle>No collections</EmptyTitle>
-            <EmptyDescription>
-              This API has not registered any admin collections.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <EmptyNote>This API has not registered any admin collections.</EmptyNote>
       ) : null}
 
       {collections && collections.length > 0 ? (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Kind</TableHead>
-              <TableHead>Fields</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {collections.map((collection) => (
-              <TableRow
-                key={collection.name}
-                className="cursor-pointer"
-                tabIndex={0}
-                onClick={() => navigate(`/collections/${collection.name}`)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault()
-                    navigate(`/collections/${collection.name}`)
-                  }
-                }}
-              >
-                <TableCell className="font-medium">{collection.name}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary">{collection.kind}</Badge>
-                </TableCell>
-                <TableCell className="max-w-md truncate text-muted-foreground">
-                  {collection.fields.join(", ")}
-                </TableCell>
+        <TableScroll>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Kind</TableHead>
+                <TableHead className="hidden @lg/table:table-cell">Fields</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {collections.map((collection) => (
+                <TableRow
+                  key={collection.name}
+                  className="cursor-pointer"
+                  tabIndex={0}
+                  onClick={() => navigate(`/collections/${collection.name}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault()
+                      navigate(`/collections/${collection.name}`)
+                    }
+                  }}
+                >
+                  <TableCell className="font-medium">{collection.name}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{collection.kind}</Badge>
+                  </TableCell>
+                  <TableCell className="hidden max-w-md truncate text-muted-foreground @lg/table:table-cell">
+                    {collection.fields.join(", ")}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableScroll>
       ) : null}
     </div>
   )

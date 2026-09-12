@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Link, useParams } from "react-router"
-import { FileJsonIcon } from "lucide-react"
+import { Link, useNavigate, useParams } from "react-router"
 import { toast } from "sonner"
 
 import {
@@ -11,8 +10,11 @@ import {
   listDocuments,
   patchDocument,
 } from "@/lib/api"
-import { formatCell, parseJsonObject, prettyJson } from "@/lib/json"
+import { parseJsonObject, prettyJson } from "@/lib/json"
 import type { AdminCollectionInfo, CollectionDoc } from "@/lib/types"
+import { FieldCell, ImageLightbox, UsersActions } from "@/components/field-cell"
+import { JsonEditor } from "@/components/json-editor"
+import { EmptyNote, ErrorNote, LoadingRows, PageHeader, TableScroll } from "@/components/page"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,13 +34,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import {
   Sheet,
@@ -48,7 +43,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -69,6 +63,7 @@ function documentId(doc: CollectionDoc): string {
 
 export function CollectionPage() {
   const { name = "" } = useParams()
+  const navigate = useNavigate()
   const [collection, setCollection] = useState<AdminCollectionInfo | null>(null)
   const [missing, setMissing] = useState(false)
   const [docs, setDocs] = useState<CollectionDoc[] | null>(null)
@@ -87,8 +82,12 @@ export function CollectionPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [createText, setCreateText] = useState(EMPTY_OBJECT)
   const [creating, setCreating] = useState(false)
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(
+    null
+  )
 
   const fields = collection?.fields ?? ["_id"]
+  const isUsers = collection?.kind === "users" || name === "users"
   const [pageName, setPageName] = useState(name)
   if (name !== pageName) {
     setPageName(name)
@@ -102,6 +101,7 @@ export function CollectionPage() {
     setNextSkip(undefined)
     setMissing(false)
     setCollection(null)
+    setLightbox(null)
   }
 
   const reload = useCallback(async () => {
@@ -292,44 +292,31 @@ export function CollectionPage() {
 
   if (missing) {
     return (
-      <div className="flex flex-1 flex-col gap-4 p-4">
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <FileJsonIcon />
-            </EmptyMedia>
-            <EmptyTitle>Collection not found</EmptyTitle>
-            <EmptyDescription>
-              <Link to="/" className="underline underline-offset-4">
-                Back to collections
-              </Link>
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </div>
+      <EmptyNote>
+        Collection not found.{" "}
+        <Link to="/collections" className="underline underline-offset-4">
+          Back to collections
+        </Link>
+      </EmptyNote>
     )
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <p className="text-xs text-muted-foreground">
-            <Link to="/" className="underline-offset-4 hover:underline">
-              Collections
-            </Link>
-          </p>
-          <h1 className="text-lg font-medium">{name}</h1>
-        </div>
-        <Button
-          onClick={() => {
-            setCreateText(EMPTY_OBJECT)
-            setCreateOpen(true)
-          }}
-        >
-          New
-        </Button>
-      </div>
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title={name}
+        description="Filter, inspect, and edit documents as JSON."
+        actions={
+          <Button
+            onClick={() => {
+              setCreateText(EMPTY_OBJECT)
+              setCreateOpen(true)
+            }}
+          >
+            New
+          </Button>
+        }
+      />
 
       <form
         className="flex flex-col gap-3"
@@ -353,7 +340,7 @@ export function CollectionPage() {
           <Button type="submit" variant="outline" size="sm">
             Apply filter
           </Button>
-          <span className="text-xs text-muted-foreground">{rangeLabel}</span>
+          <span className="font-mono text-xs text-muted-foreground">{rangeLabel}</span>
           <div className="ml-auto flex items-center gap-2">
             <Button
               type="button"
@@ -382,71 +369,64 @@ export function CollectionPage() {
       </form>
 
       {docs == null && !listError ? (
-        <div className="flex flex-col gap-2" aria-busy="true" aria-label="Loading documents">
-          <Skeleton className="h-8 w-full" />
-          <Skeleton className="h-8 w-full" />
-          <Skeleton className="h-8 w-full" />
-        </div>
+        <LoadingRows label="Loading documents" />
       ) : null}
 
-      {listError ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <FileJsonIcon />
-            </EmptyMedia>
-            <EmptyTitle>Could not load documents</EmptyTitle>
-            <EmptyDescription>{listError}</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : null}
+      <ErrorNote error={listError} />
 
       {docs && docs.length === 0 ? (
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <FileJsonIcon />
-            </EmptyMedia>
-            <EmptyTitle>No documents</EmptyTitle>
-            <EmptyDescription>
-              Adjust the filter or create a new document.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <EmptyNote>Adjust the filter or create a new document.</EmptyNote>
       ) : null}
 
       {docs && docs.length > 0 ? (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {fields.map((field) => (
-                <TableHead key={field}>{field}</TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {docs.map((doc, index) => (
-              <TableRow
-                key={documentId(doc) || String(index)}
-                className="cursor-pointer"
-                tabIndex={0}
-                onClick={() => openEditor(doc)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault()
-                    openEditor(doc)
-                  }
-                }}
-              >
+        <TableScroll>
+          <Table>
+            <TableHeader>
+              <TableRow>
                 {fields.map((field) => (
-                  <TableCell key={field} className="max-w-48 truncate">
-                    {formatCell(doc[field])}
-                  </TableCell>
+                  <TableHead key={field}>{field}</TableHead>
                 ))}
+                {isUsers ? <TableHead>Actions</TableHead> : null}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {docs.map((doc, index) => (
+                <TableRow
+                  key={documentId(doc) || String(index)}
+                  className="cursor-pointer"
+                  tabIndex={0}
+                  onClick={() => openEditor(doc)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault()
+                      openEditor(doc)
+                    }
+                  }}
+                >
+                  {fields.map((field) => (
+                    <TableCell key={field} className="max-w-48">
+                      <FieldCell
+                        field={field}
+                        value={doc[field]}
+                        onOpenImage={(src, alt) => setLightbox({ src, alt })}
+                      />
+                    </TableCell>
+                  ))}
+                  {isUsers ? (
+                    <TableCell>
+                      <UsersActions
+                        deviceId={String(doc.deviceId ?? "")}
+                        onSendPush={(deviceId) => {
+                          navigate(`/push?deviceId=${encodeURIComponent(deviceId)}`)
+                        }}
+                      />
+                    </TableCell>
+                  ) : null}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableScroll>
       ) : null}
 
       <Sheet open={editorOpen} onOpenChange={setEditorOpen}>
@@ -459,17 +439,12 @@ export function CollectionPage() {
             </SheetDescription>
           </SheetHeader>
           <div className="flex min-h-0 flex-1 flex-col px-4">
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="document-json">Document JSON</FieldLabel>
-                <Textarea
-                  id="document-json"
-                  className="min-h-64 font-mono text-xs"
-                  value={editorText}
-                  onChange={(event) => setEditorText(event.target.value)}
-                />
-              </Field>
-            </FieldGroup>
+            <JsonEditor
+              id="document-json"
+              label="Document JSON"
+              value={editorText}
+              onChange={setEditorText}
+            />
           </div>
           <SheetFooter>
             <Button
@@ -514,21 +489,14 @@ export function CollectionPage() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>New document</DialogTitle>
-            <DialogDescription>
-              POST a JSON document to {name}.
-            </DialogDescription>
+            <DialogDescription>POST a JSON document to {name}.</DialogDescription>
           </DialogHeader>
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="new-document-json">Document JSON</FieldLabel>
-              <Textarea
-                id="new-document-json"
-                className="min-h-48 font-mono text-xs"
-                value={createText}
-                onChange={(event) => setCreateText(event.target.value)}
-              />
-            </Field>
-          </FieldGroup>
+          <JsonEditor
+            id="new-document-json"
+            label="Document JSON"
+            value={createText}
+            onChange={setCreateText}
+          />
           <DialogFooter>
             <Button
               type="button"
@@ -544,6 +512,14 @@ export function CollectionPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {lightbox ? (
+        <ImageLightbox
+          src={lightbox.src}
+          alt={lightbox.alt}
+          onClose={() => setLightbox(null)}
+        />
+      ) : null}
     </div>
   )
 }

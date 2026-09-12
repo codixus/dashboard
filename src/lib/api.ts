@@ -208,13 +208,19 @@ export async function listCollections(): Promise<AdminCollectionInfo[]> {
 
 export async function listDocuments(
   name: string,
-  opts: { filter: string; limit: number; skip: number }
+  opts: {
+    filter: string
+    limit: number
+    skip: number
+    sort?: Record<string, 1 | -1>
+  }
 ): Promise<{ docs: CollectionDoc[]; nextSkip?: number }> {
   const result = await adminJson<CollectionDoc[]>(
     withQuery(`/admin/collections/${encodeURIComponent(name)}`, {
       filter: opts.filter,
       limit: opts.limit,
       skip: opts.skip,
+      sort: opts.sort ? JSON.stringify(opts.sort) : undefined,
     })
   )
   return { docs: result.data ?? [], nextSkip: result.nextSkip }

@@ -4,6 +4,7 @@ import { RequireAuth } from "@/components/require-auth"
 import { CollectionPage } from "@/pages/collection"
 import { CollectionsPage } from "@/pages/collections"
 import { LoginPage } from "@/pages/login"
+import { OverviewPage } from "@/pages/overview"
 import { PushPage } from "@/pages/push"
 
 export function AppRoutes() {
@@ -11,7 +12,8 @@ export function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAuth />}>
-        <Route path="/" element={<CollectionsPage />} />
+        <Route path="/" element={<OverviewPage />} />
+        <Route path="/collections" element={<CollectionsPage />} />
         <Route path="/collections/:name" element={<CollectionPage />} />
         <Route path="/push" element={<PushPage />} />
       </Route>
