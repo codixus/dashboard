@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import {
   EmptyNote,
   ErrorNote,
-  GrowthBars,
+  GrowthLineChart,
   LoadingRows,
   PageHeader,
   StatTile,
@@ -147,7 +147,7 @@ export function OverviewPage() {
       {series ? (
         <div className="grid gap-4 xl:grid-cols-3">
           {(["users", "push_devices", "push_deliveries"] as const).map((kind) => (
-            <GrowthBars
+            <GrowthLineChart
               key={kind}
               label={`${LABELS[kind]} / 14d`}
               daily={series[kind].daily}
