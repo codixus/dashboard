@@ -50,12 +50,19 @@ export type PushJourneyAudience = {
   eventName: string
 }
 
+export type PushJourneyStepTranslation = {
+  title: string
+  body: string
+  imageUrl?: string
+}
+
 export type PushJourneyStep = {
   id: string
   offsetSeconds: number
   title: string
   body: string
   imageUrl?: string
+  translations?: Record<string, PushJourneyStepTranslation>
   data?: Record<string, unknown>
 }
 

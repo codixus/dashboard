@@ -32,17 +32,46 @@ import {
   updateJourneyDraft,
 } from "@/lib/api"
 import {
+  BUILT_IN_JOURNEY_EVENTS,
   buildJourneyPayload,
   emptyJourneyEditor,
   emptyJourneyStep,
+  emptyJourneyTranslation,
+  journeyEditorToJson,
+  journeyJsonToEditor,
   journeyToEditor,
+  type JourneyEventSelection,
   type JourneyEditorState,
   type JourneyEditorStep,
+  type JourneyEditorTranslation,
 } from "@/lib/journeys"
 import type { PushDevice, PushJourney } from "@/lib/types"
 
 const selectClass =
   "h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+
+const EMPTY_JOURNEY_JSON = JSON.stringify(
+  {
+    name: "",
+    definition: {
+      entryEvent: "user_created",
+      steps: [
+        {
+          id: "welcome",
+          offsetSeconds: 120,
+          title: "Welcome",
+          body: "Your message",
+          translations: {
+            tr: { title: "Hoş geldin", body: "Mesajın" },
+          },
+          data: { route: "/menu" },
+        },
+      ],
+    },
+  },
+  null,
+  2
+)
 
 function errorCode(error: unknown) {
   return error instanceof ApiError ? error.code : "REQUEST_FAILED"
@@ -52,6 +81,64 @@ function statusVariant(status: PushJourney["status"]) {
   if (status === "live") return "default" as const
   if (status === "paused") return "secondary" as const
   return "outline" as const
+}
+
+function JourneyEventField({
+  id,
+  label,
+  selection,
+  value,
+  onChange,
+}: {
+  id: string
+  label: string
+  selection: JourneyEventSelection
+  value: string
+  onChange: (selection: JourneyEventSelection, value: string) => void
+}) {
+  const selectedEvent = BUILT_IN_JOURNEY_EVENTS.find(
+    (event) => event.value === selection
+  )
+  const customLabel = `Custom ${label.toLowerCase()} name`
+
+  return (
+    <Field>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <select
+        id={id}
+        className={selectClass}
+        value={selection}
+        onChange={(event) => {
+          const next = event.target.value as JourneyEventSelection
+          onChange(
+            next,
+            next === "custom" ? (selection === "custom" ? value : "") : next
+          )
+        }}
+      >
+        <option value="">Select an event…</option>
+        {BUILT_IN_JOURNEY_EVENTS.map((event) => (
+          <option key={event.value} value={event.value}>
+            {event.label}
+          </option>
+        ))}
+        <option value="custom">Custom event…</option>
+      </select>
+      {selectedEvent ? (
+        <p className="text-xs text-muted-foreground">
+          {selectedEvent.description}
+        </p>
+      ) : null}
+      {selection === "custom" ? (
+        <Input
+          aria-label={customLabel}
+          value={value}
+          placeholder="custom_event_name"
+          onChange={(event) => onChange("custom", event.target.value)}
+        />
+      ) : null}
+    </Field>
+  )
 }
 
 export function JourneysPage() {
@@ -66,6 +153,8 @@ export function JourneysPage() {
   const [testStepClientId, setTestStepClientId] = useState("")
   const [searching, setSearching] = useState(false)
   const [testing, setTesting] = useState(false)
+  const [editorMode, setEditorMode] = useState<"builder" | "json">("builder")
+  const [journeyJson, setJourneyJson] = useState(EMPTY_JOURNEY_JSON)
 
   const selected =
     journeys?.find((journey) => journey._id === selectedId) ?? null
@@ -76,8 +165,11 @@ export function JourneysPage() {
 
   function openJourney(journey: PushJourney) {
     const nextEditor = journeyToEditor(journey)
+    const nextJson = journeyEditorToJson(nextEditor)
     setSelectedId(journey._id)
     setEditor(nextEditor)
+    setEditorMode("builder")
+    if (nextJson.ok) setJourneyJson(nextJson.value)
     setTestStepClientId(nextEditor.steps[0]?.clientId ?? "")
     setDevices(null)
     setTestDevice(null)
@@ -136,6 +228,8 @@ export function JourneysPage() {
   function startNewJourney() {
     setSelectedId(null)
     setEditor(emptyJourneyEditor())
+    setEditorMode("builder")
+    setJourneyJson(EMPTY_JOURNEY_JSON)
     setTestStepClientId("")
     setDevices(null)
     setTestDevice(null)
@@ -159,6 +253,21 @@ export function JourneysPage() {
     }))
   }
 
+  function updateTranslation(
+    stepClientId: string,
+    translationClientId: string,
+    update: (current: JourneyEditorTranslation) => JourneyEditorTranslation
+  ) {
+    updateStep(stepClientId, (step) => ({
+      ...step,
+      translations: step.translations.map((translation) =>
+        translation.clientId === translationClientId
+          ? update(translation)
+          : translation
+      ),
+    }))
+  }
+
   function replaceJourney(next: PushJourney) {
     setJourneys((current) => {
       const rows = current ?? []
@@ -169,9 +278,44 @@ export function JourneysPage() {
     openJourney(next)
   }
 
-  async function saveDraft() {
+  function editableState(): JourneyEditorState | null {
+    if (!editor) return null
+    if (editorMode === "builder") return editor
+
+    const parsed = journeyJsonToEditor(journeyJson)
+    if (!parsed.ok) {
+      setError(parsed.error)
+      return null
+    }
+    return parsed.value
+  }
+
+  function showJsonEditor() {
+    if (editorMode === "json") return
     if (!editor) return
-    const payload = buildJourneyPayload(editor)
+    const serialized = journeyEditorToJson(editor)
+    if (serialized.ok) setJourneyJson(serialized.value)
+    setEditorMode("json")
+    setError(null)
+  }
+
+  function showBuilder() {
+    if (editorMode === "builder") return
+    const parsed = journeyJsonToEditor(journeyJson)
+    if (!parsed.ok) {
+      setError(parsed.error)
+      return
+    }
+    setEditor(parsed.value)
+    setTestStepClientId(parsed.value.steps[0]?.clientId ?? "")
+    setEditorMode("builder")
+    setError(null)
+  }
+
+  async function saveDraft() {
+    const currentEditor = editableState()
+    if (!currentEditor) return
+    const payload = buildJourneyPayload(currentEditor)
     if (!payload.ok) {
       setError(payload.error)
       return
@@ -199,8 +343,9 @@ export function JourneysPage() {
     try {
       let target = selected
       if (action === "publish") {
-        if (!editor) return
-        const payload = buildJourneyPayload(editor)
+        const currentEditor = editableState()
+        if (!currentEditor) return
+        const payload = buildJourneyPayload(currentEditor)
         if (!payload.ok) {
           setError(payload.error)
           return
@@ -255,7 +400,9 @@ export function JourneysPage() {
     setTesting(true)
     setError(null)
     try {
-      const payload = buildJourneyPayload(editor)
+      const currentEditor = editableState()
+      if (!currentEditor) return
+      const payload = buildJourneyPayload(currentEditor)
       if (!payload.ok) {
         setError(payload.error)
         return
@@ -270,7 +417,9 @@ export function JourneysPage() {
         setError("NO_DEVICE")
         return
       }
-      const submitted = results.filter((result) => result.status === "submitted")
+      const submitted = results.filter(
+        (result) => result.status === "submitted"
+      )
       if (submitted.length === 0) {
         const failed = results.find(
           (result) => result.status === "failed" || result.status === "skipped"
@@ -282,7 +431,9 @@ export function JourneysPage() {
         return
       }
       const noun = results.length === 1 ? "token" : "tokens"
-      toast.success(`Test submitted to ${submitted.length}/${results.length} ${noun}`)
+      toast.success(
+        `Test submitted to ${submitted.length}/${results.length} ${noun}`
+      )
     } catch (testError) {
       setError(errorCode(testError))
     } finally {
@@ -315,8 +466,12 @@ export function JourneysPage() {
 
       <ErrorNote error={error} />
 
-      <div className="grid min-w-0 gap-6 xl:grid-cols-[17rem_minmax(0,1fr)]">
-        <aside className="min-w-0">
+      <div
+        data-testid="journey-workspace"
+        data-layout="single-column"
+        className="flex min-w-0 flex-col gap-6"
+      >
+        <section className="min-w-0" aria-label="All journeys">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-medium">All journeys</h2>
             <span className="font-mono text-xs text-muted-foreground">
@@ -328,14 +483,14 @@ export function JourneysPage() {
             <EmptyNote>No journeys yet</EmptyNote>
           ) : null}
           {journeys && journeys.length > 0 ? (
-            <div className="flex flex-col border">
+            <div className="grid border sm:grid-cols-2 xl:grid-cols-3">
               {journeys.map((journey) => (
                 <button
                   key={journey._id}
                   type="button"
                   aria-label={`Edit ${journey.name}`}
                   aria-current={selectedId === journey._id ? "true" : undefined}
-                  className="flex min-w-0 items-center gap-2 border-b px-3 py-3 text-left last:border-b-0 hover:bg-muted/60 aria-current:bg-muted"
+                  className="flex min-w-0 items-center gap-2 border-b px-3 py-3 text-left hover:bg-muted/60 aria-current:bg-muted sm:border-r xl:[&:nth-child(3n)]:border-r-0"
                   onClick={() => openJourney(journey)}
                 >
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">
@@ -348,7 +503,7 @@ export function JourneysPage() {
               ))}
             </div>
           ) : null}
-        </aside>
+        </section>
 
         <main className="min-w-0">
           {!editor && journeys !== null ? (
@@ -373,289 +528,497 @@ export function JourneysPage() {
                       previous step.
                     </p>
                   </div>
-                  {selected ? (
-                    <Badge variant={statusVariant(selected.status)}>
-                      {selected.status}
-                    </Badge>
-                  ) : null}
+                  <div className="flex items-center gap-2">
+                    <div className="flex rounded-lg border p-0.5">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={
+                          editorMode === "builder" ? "secondary" : "ghost"
+                        }
+                        onClick={showBuilder}
+                      >
+                        Builder
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={editorMode === "json" ? "secondary" : "ghost"}
+                        onClick={showJsonEditor}
+                      >
+                        JSON
+                      </Button>
+                    </div>
+                    {selected ? (
+                      <Badge variant={statusVariant(selected.status)}>
+                        {selected.status}
+                      </Badge>
+                    ) : null}
+                  </div>
                 </div>
 
-                <FieldGroup>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Field>
-                      <FieldLabel htmlFor="journey-name">
-                        Journey name
-                      </FieldLabel>
-                      <Input
-                        id="journey-name"
-                        value={editor.name}
-                        maxLength={100}
-                        onChange={(event) =>
-                          edit((current) => ({
-                            ...current,
-                            name: event.target.value,
-                          }))
-                        }
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="entry-event">Entry event</FieldLabel>
-                      <Input
-                        id="entry-event"
-                        value={editor.entryEvent}
-                        placeholder="purchase_completed"
-                        onChange={(event) =>
-                          edit((current) => ({
-                            ...current,
-                            entryEvent: event.target.value,
-                          }))
-                        }
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="audience-operator">
-                        Audience
-                      </FieldLabel>
-                      <select
-                        id="audience-operator"
-                        className={selectClass}
-                        value={editor.audienceOperator}
-                        onChange={(event) =>
-                          edit((current) => ({
-                            ...current,
-                            audienceOperator: event.target
-                              .value as JourneyEditorState["audienceOperator"],
-                          }))
-                        }
-                      >
-                        <option value="all">Everyone entering</option>
-                        <option value="has_event">Has event</option>
-                        <option value="not_has_event">
-                          Does not have event
-                        </option>
-                      </select>
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="audience-event">
-                        Audience event
-                      </FieldLabel>
-                      <Input
-                        id="audience-event"
-                        value={editor.audienceEvent}
-                        placeholder="purchase_completed"
-                        disabled={editor.audienceOperator === "all"}
-                        onChange={(event) =>
-                          edit((current) => ({
-                            ...current,
-                            audienceEvent: event.target.value,
-                          }))
-                        }
-                      />
-                    </Field>
-                  </div>
-                </FieldGroup>
-
-                <div className="flex min-w-0 flex-col gap-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-medium">Message steps</h3>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Ordered from earliest to latest. Maximum 20 steps.
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={editor.steps.length >= 20}
-                      onClick={() =>
-                        edit((current) => ({
-                          ...current,
-                          steps: [
-                            ...current.steps,
-                            emptyJourneyStep(current.steps.length),
-                          ],
-                        }))
-                      }
-                    >
-                      <PlusIcon data-icon="inline-start" />
-                      Add step
-                    </Button>
-                  </div>
-
-                  {editor.steps.map((step, index) => {
-                    const number = index + 1
-                    return (
-                      <fieldset
-                        key={step.clientId}
-                        className="min-w-0 border bg-background p-4"
-                      >
-                        <div className="mb-4 flex items-center justify-between gap-3">
-                          <legend className="text-sm font-medium">
-                            Step {number}
-                          </legend>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            aria-label={`Remove step ${number}`}
-                            disabled={editor.steps.length === 1}
-                            onClick={() =>
+                {editorMode === "json" ? (
+                  <Field>
+                    <FieldLabel htmlFor="journey-json">Journey JSON</FieldLabel>
+                    <p className="text-xs text-muted-foreground">
+                      Import or edit the complete API payload. Locale keys such
+                      as tr, tr-TR and en-US are supported in each step's
+                      translations.
+                    </p>
+                    <Textarea
+                      id="journey-json"
+                      className="min-h-[36rem] font-mono text-xs"
+                      spellCheck={false}
+                      value={journeyJson}
+                      onChange={(event) => {
+                        setJourneyJson(event.target.value)
+                        setError(null)
+                      }}
+                    />
+                  </Field>
+                ) : (
+                  <>
+                    <FieldGroup>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <Field>
+                          <FieldLabel htmlFor="journey-name">
+                            Journey name
+                          </FieldLabel>
+                          <Input
+                            id="journey-name"
+                            value={editor.name}
+                            maxLength={100}
+                            onChange={(event) =>
                               edit((current) => ({
                                 ...current,
-                                steps: current.steps.filter(
-                                  (candidate) =>
-                                    candidate.clientId !== step.clientId
-                                ),
+                                name: event.target.value,
+                              }))
+                            }
+                          />
+                        </Field>
+                        <JourneyEventField
+                          id="entry-event"
+                          label="Entry event"
+                          selection={editor.entryEventSelection}
+                          value={editor.entryEvent}
+                          onChange={(selection, value) =>
+                            edit((current) => ({
+                              ...current,
+                              entryEventSelection: selection,
+                              entryEvent: value,
+                            }))
+                          }
+                        />
+                        <Field>
+                          <FieldLabel htmlFor="audience-operator">
+                            Audience
+                          </FieldLabel>
+                          <select
+                            id="audience-operator"
+                            className={selectClass}
+                            value={editor.audienceOperator}
+                            onChange={(event) =>
+                              edit((current) => ({
+                                ...current,
+                                audienceOperator: event.target
+                                  .value as JourneyEditorState["audienceOperator"],
                               }))
                             }
                           >
-                            <Trash2Icon />
-                          </Button>
+                            <option value="all">Everyone entering</option>
+                            <option value="has_event">Has event</option>
+                            <option value="not_has_event">
+                              Does not have event
+                            </option>
+                          </select>
+                        </Field>
+                        {editor.audienceOperator !== "all" ? (
+                          <JourneyEventField
+                            id="audience-event"
+                            label="Audience event"
+                            selection={editor.audienceEventSelection}
+                            value={editor.audienceEvent}
+                            onChange={(selection, value) =>
+                              edit((current) => ({
+                                ...current,
+                                audienceEventSelection: selection,
+                                audienceEvent: value,
+                              }))
+                            }
+                          />
+                        ) : null}
+                      </div>
+                    </FieldGroup>
+
+                    <div className="flex min-w-0 flex-col gap-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm font-medium">Message steps</h3>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Ordered from earliest to latest. Maximum 20 steps.
+                          </p>
                         </div>
-                        <div className="grid min-w-0 gap-4 md:grid-cols-2">
-                          <Field>
-                            <FieldLabel htmlFor={`step-${number}-id`}>
-                              Step {number} ID
-                            </FieldLabel>
-                            <Input
-                              id={`step-${number}-id`}
-                              value={step.id}
-                              onChange={(event) =>
-                                updateStep(step.clientId, (current) => ({
-                                  ...current,
-                                  id: event.target.value,
-                                }))
-                              }
-                            />
-                          </Field>
-                          <div className="grid grid-cols-[minmax(0,1fr)_8rem] gap-2">
-                            <Field>
-                              <FieldLabel htmlFor={`step-${number}-delay`}>
-                                Step {number} delay
-                              </FieldLabel>
-                              <Input
-                                id={`step-${number}-delay`}
-                                type="number"
-                                min="0"
-                                step="any"
-                                value={step.delay}
-                                onChange={(event) =>
-                                  updateStep(step.clientId, (current) => ({
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={editor.steps.length >= 20}
+                          onClick={() =>
+                            edit((current) => ({
+                              ...current,
+                              steps: [
+                                ...current.steps,
+                                emptyJourneyStep(current.steps.length),
+                              ],
+                            }))
+                          }
+                        >
+                          <PlusIcon data-icon="inline-start" />
+                          Add step
+                        </Button>
+                      </div>
+
+                      {editor.steps.map((step, index) => {
+                        const number = index + 1
+                        return (
+                          <fieldset
+                            key={step.clientId}
+                            className="min-w-0 border bg-background p-4"
+                          >
+                            <div className="mb-4 flex items-center justify-between gap-3">
+                              <legend className="text-sm font-medium">
+                                Step {number}
+                              </legend>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={`Remove step ${number}`}
+                                disabled={editor.steps.length === 1}
+                                onClick={() =>
+                                  edit((current) => ({
                                     ...current,
-                                    delay: event.target.value,
-                                  }))
-                                }
-                              />
-                            </Field>
-                            <Field>
-                              <FieldLabel htmlFor={`step-${number}-unit`}>
-                                Unit
-                              </FieldLabel>
-                              <select
-                                id={`step-${number}-unit`}
-                                className={selectClass}
-                                value={step.delayUnit}
-                                onChange={(event) =>
-                                  updateStep(step.clientId, (current) => ({
-                                    ...current,
-                                    delayUnit: event.target
-                                      .value as JourneyEditorStep["delayUnit"],
+                                    steps: current.steps.filter(
+                                      (candidate) =>
+                                        candidate.clientId !== step.clientId
+                                    ),
                                   }))
                                 }
                               >
-                                <option value="minutes">Minutes</option>
-                                <option value="hours">Hours</option>
-                                <option value="days">Days</option>
-                              </select>
-                            </Field>
-                          </div>
-                          <Field>
-                            <FieldLabel htmlFor={`step-${number}-title`}>
-                              Step {number} title
-                            </FieldLabel>
-                            <Input
-                              id={`step-${number}-title`}
-                              maxLength={100}
-                              value={step.title}
-                              onChange={(event) =>
-                                updateStep(step.clientId, (current) => ({
-                                  ...current,
-                                  title: event.target.value,
-                                }))
-                              }
-                            />
-                          </Field>
-                          <Field>
-                            <FieldLabel htmlFor={`step-${number}-message`}>
-                              Step {number} message
-                            </FieldLabel>
-                            <Textarea
-                              id={`step-${number}-message`}
-                              maxLength={1000}
-                              value={step.body}
-                              onChange={(event) =>
-                                updateStep(step.clientId, (current) => ({
-                                  ...current,
-                                  body: event.target.value,
-                                }))
-                              }
-                            />
-                          </Field>
-                          <Field>
-                            <FieldLabel htmlFor={`step-${number}-image`}>
-                              Step {number} image URL
-                            </FieldLabel>
-                            <Input
-                              id={`step-${number}-image`}
-                              type="url"
-                              placeholder="https://..."
-                              value={step.imageUrl}
-                              onChange={(event) =>
-                                updateStep(step.clientId, (current) => ({
-                                  ...current,
-                                  imageUrl: event.target.value,
-                                }))
-                              }
-                            />
-                          </Field>
-                          <Field>
-                            <FieldLabel htmlFor={`step-${number}-route`}>
-                              Step {number} route
-                            </FieldLabel>
-                            <Input
-                              id={`step-${number}-route`}
-                              placeholder="/menu"
-                              value={step.route}
-                              onChange={(event) =>
-                                updateStep(step.clientId, (current) => ({
-                                  ...current,
-                                  route: event.target.value,
-                                }))
-                              }
-                            />
-                          </Field>
-                          <Field className="md:col-span-2">
-                            <FieldLabel htmlFor={`step-${number}-data`}>
-                              Step {number} data JSON
-                            </FieldLabel>
-                            <Textarea
-                              id={`step-${number}-data`}
-                              className="min-h-24 font-mono text-xs"
-                              value={step.dataText}
-                              onChange={(event) =>
-                                updateStep(step.clientId, (current) => ({
-                                  ...current,
-                                  dataText: event.target.value,
-                                }))
-                              }
-                            />
-                          </Field>
-                        </div>
-                      </fieldset>
-                    )
-                  })}
-                </div>
+                                <Trash2Icon />
+                              </Button>
+                            </div>
+                            <div className="grid min-w-0 gap-4 md:grid-cols-2">
+                              <Field>
+                                <FieldLabel htmlFor={`step-${number}-id`}>
+                                  Step {number} ID
+                                </FieldLabel>
+                                <Input
+                                  id={`step-${number}-id`}
+                                  value={step.id}
+                                  onChange={(event) =>
+                                    updateStep(step.clientId, (current) => ({
+                                      ...current,
+                                      id: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </Field>
+                              <div className="grid grid-cols-[minmax(0,1fr)_8rem] gap-2">
+                                <Field>
+                                  <FieldLabel htmlFor={`step-${number}-delay`}>
+                                    Step {number} delay
+                                  </FieldLabel>
+                                  <Input
+                                    id={`step-${number}-delay`}
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    value={step.delay}
+                                    onChange={(event) =>
+                                      updateStep(step.clientId, (current) => ({
+                                        ...current,
+                                        delay: event.target.value,
+                                      }))
+                                    }
+                                  />
+                                </Field>
+                                <Field>
+                                  <FieldLabel htmlFor={`step-${number}-unit`}>
+                                    Unit
+                                  </FieldLabel>
+                                  <select
+                                    id={`step-${number}-unit`}
+                                    className={selectClass}
+                                    value={step.delayUnit}
+                                    onChange={(event) =>
+                                      updateStep(step.clientId, (current) => ({
+                                        ...current,
+                                        delayUnit: event.target
+                                          .value as JourneyEditorStep["delayUnit"],
+                                      }))
+                                    }
+                                  >
+                                    <option value="minutes">Minutes</option>
+                                    <option value="hours">Hours</option>
+                                    <option value="days">Days</option>
+                                  </select>
+                                </Field>
+                              </div>
+                              <Field>
+                                <FieldLabel htmlFor={`step-${number}-title`}>
+                                  Step {number} title
+                                </FieldLabel>
+                                <Input
+                                  id={`step-${number}-title`}
+                                  maxLength={100}
+                                  value={step.title}
+                                  onChange={(event) =>
+                                    updateStep(step.clientId, (current) => ({
+                                      ...current,
+                                      title: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor={`step-${number}-message`}>
+                                  Step {number} message
+                                </FieldLabel>
+                                <Textarea
+                                  id={`step-${number}-message`}
+                                  maxLength={1000}
+                                  value={step.body}
+                                  onChange={(event) =>
+                                    updateStep(step.clientId, (current) => ({
+                                      ...current,
+                                      body: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor={`step-${number}-image`}>
+                                  Step {number} image URL
+                                </FieldLabel>
+                                <Input
+                                  id={`step-${number}-image`}
+                                  type="url"
+                                  placeholder="https://..."
+                                  value={step.imageUrl}
+                                  onChange={(event) =>
+                                    updateStep(step.clientId, (current) => ({
+                                      ...current,
+                                      imageUrl: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </Field>
+                              <Field>
+                                <FieldLabel htmlFor={`step-${number}-route`}>
+                                  Step {number} route
+                                </FieldLabel>
+                                <Input
+                                  id={`step-${number}-route`}
+                                  placeholder="/menu"
+                                  value={step.route}
+                                  onChange={(event) =>
+                                    updateStep(step.clientId, (current) => ({
+                                      ...current,
+                                      route: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </Field>
+                              <Field className="md:col-span-2">
+                                <FieldLabel htmlFor={`step-${number}-data`}>
+                                  Step {number} data JSON
+                                </FieldLabel>
+                                <Textarea
+                                  id={`step-${number}-data`}
+                                  className="min-h-24 font-mono text-xs"
+                                  value={step.dataText}
+                                  onChange={(event) =>
+                                    updateStep(step.clientId, (current) => ({
+                                      ...current,
+                                      dataText: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </Field>
+                            </div>
+                            <div className="mt-5 border-t pt-4">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                  <h4 className="text-sm font-medium">
+                                    Localized content
+                                  </h4>
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Exact locale, then base language, then the
+                                    default content above.
+                                  </p>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={step.translations.length >= 20}
+                                  onClick={() =>
+                                    updateStep(step.clientId, (current) => ({
+                                      ...current,
+                                      translations: [
+                                        ...current.translations,
+                                        emptyJourneyTranslation(),
+                                      ],
+                                    }))
+                                  }
+                                >
+                                  <PlusIcon data-icon="inline-start" />
+                                  Add translation
+                                </Button>
+                              </div>
+                              {step.translations.length > 0 ? (
+                                <div className="mt-4 flex flex-col gap-3">
+                                  {step.translations.map(
+                                    (translation, translationIndex) => {
+                                      const translationNumber =
+                                        translationIndex + 1
+                                      return (
+                                        <div
+                                          key={translation.clientId}
+                                          className="grid min-w-0 gap-3 rounded-lg border bg-card p-3 md:grid-cols-2"
+                                        >
+                                          <Field>
+                                            <FieldLabel
+                                              htmlFor={`step-${number}-translation-${translationNumber}-locale`}
+                                            >
+                                              Step {number} translation{" "}
+                                              {translationNumber} locale
+                                            </FieldLabel>
+                                            <Input
+                                              id={`step-${number}-translation-${translationNumber}-locale`}
+                                              placeholder="tr or tr-TR"
+                                              value={translation.locale}
+                                              onChange={(event) =>
+                                                updateTranslation(
+                                                  step.clientId,
+                                                  translation.clientId,
+                                                  (current) => ({
+                                                    ...current,
+                                                    locale: event.target.value,
+                                                  })
+                                                )
+                                              }
+                                            />
+                                          </Field>
+                                          <div className="flex items-end justify-end">
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon-sm"
+                                              aria-label={`Remove step ${number} translation ${translationNumber}`}
+                                              onClick={() =>
+                                                updateStep(
+                                                  step.clientId,
+                                                  (current) => ({
+                                                    ...current,
+                                                    translations:
+                                                      current.translations.filter(
+                                                        (candidate) =>
+                                                          candidate.clientId !==
+                                                          translation.clientId
+                                                      ),
+                                                  })
+                                                )
+                                              }
+                                            >
+                                              <Trash2Icon />
+                                            </Button>
+                                          </div>
+                                          <Field>
+                                            <FieldLabel
+                                              htmlFor={`step-${number}-translation-${translationNumber}-title`}
+                                            >
+                                              Step {number} translation{" "}
+                                              {translationNumber} title
+                                            </FieldLabel>
+                                            <Input
+                                              id={`step-${number}-translation-${translationNumber}-title`}
+                                              maxLength={100}
+                                              value={translation.title}
+                                              onChange={(event) =>
+                                                updateTranslation(
+                                                  step.clientId,
+                                                  translation.clientId,
+                                                  (current) => ({
+                                                    ...current,
+                                                    title: event.target.value,
+                                                  })
+                                                )
+                                              }
+                                            />
+                                          </Field>
+                                          <Field>
+                                            <FieldLabel
+                                              htmlFor={`step-${number}-translation-${translationNumber}-message`}
+                                            >
+                                              Step {number} translation{" "}
+                                              {translationNumber} message
+                                            </FieldLabel>
+                                            <Textarea
+                                              id={`step-${number}-translation-${translationNumber}-message`}
+                                              maxLength={1000}
+                                              value={translation.body}
+                                              onChange={(event) =>
+                                                updateTranslation(
+                                                  step.clientId,
+                                                  translation.clientId,
+                                                  (current) => ({
+                                                    ...current,
+                                                    body: event.target.value,
+                                                  })
+                                                )
+                                              }
+                                            />
+                                          </Field>
+                                          <Field className="md:col-span-2">
+                                            <FieldLabel
+                                              htmlFor={`step-${number}-translation-${translationNumber}-image`}
+                                            >
+                                              Step {number} translation{" "}
+                                              {translationNumber} image URL
+                                            </FieldLabel>
+                                            <Input
+                                              id={`step-${number}-translation-${translationNumber}-image`}
+                                              type="url"
+                                              placeholder="Optional; inherits the default image"
+                                              value={translation.imageUrl}
+                                              onChange={(event) =>
+                                                updateTranslation(
+                                                  step.clientId,
+                                                  translation.clientId,
+                                                  (current) => ({
+                                                    ...current,
+                                                    imageUrl:
+                                                      event.target.value,
+                                                  })
+                                                )
+                                              }
+                                            />
+                                          </Field>
+                                        </div>
+                                      )
+                                    }
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                          </fieldset>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
 
                 <div className="flex flex-wrap items-center gap-2 border-t pt-4">
                   <Button type="submit" disabled={busy}>
