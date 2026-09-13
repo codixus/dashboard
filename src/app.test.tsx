@@ -52,18 +52,20 @@ describe("operator dashboard", () => {
 
   it("stores the admin token and redirects after a 204 session", async () => {
     const user = userEvent.setup()
-    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input)
-      if (url.pathname.endsWith("/admin/session")) {
-        expect(url.href).toBe(`${getApiUrl()}/admin/session`)
-        expect(new Headers(init?.headers).get(ADMIN_HEADER)).toBe(TOKEN)
-        return new Response(null, { status: 204 })
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input)
+        if (url.pathname.endsWith("/admin/session")) {
+          expect(url.href).toBe(`${getApiUrl()}/admin/session`)
+          expect(new Headers(init?.headers).get(ADMIN_HEADER)).toBe(TOKEN)
+          return new Response(null, { status: 204 })
+        }
+        if (url.pathname.endsWith("/admin/collections")) {
+          return json({ success: true, data: [] })
+        }
+        return json({ success: false, error: "NOT_FOUND" }, 404)
       }
-      if (url.pathname.endsWith("/admin/collections")) {
-        return json({ success: true, data: [] })
-      }
-      return json({ success: false, error: "NOT_FOUND" }, 404)
-    })
+    )
 
     renderApp("/login")
 
@@ -73,7 +75,9 @@ describe("operator dashboard", () => {
     await waitFor(() => {
       expect(sessionStorage.getItem(ADMIN_TOKEN_KEY)).toBe(TOKEN)
     })
-    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "Overview" })
+    ).toBeInTheDocument()
   })
 
   it("toasts on login 401 and does not write storage", async () => {
@@ -132,70 +136,83 @@ describe("operator dashboard", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe(`${getApiUrl()}/admin/collections`)
     expect(new Headers(init.headers).get(ADMIN_HEADER)).toBe(TOKEN)
-    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "Overview" })
+    ).toBeInTheDocument()
   })
 
   function mockUsersCollection(listed: Array<Record<string, unknown>>) {
-    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input)
-      const method = init?.method ?? "GET"
-      const path = url.pathname
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input)
+        const method = init?.method ?? "GET"
+        const path = url.pathname
 
-      if (path.endsWith("/admin/collections") && method === "GET") {
-        return json({
-          success: true,
-          data: [
-            {
-              name: "users",
-              fields: ["_id", "deviceId", "locale", "createdAt"],
-              kind: "users",
-            },
-          ],
-        })
-      }
-
-      if (path.endsWith("/admin/collections/users") && method === "GET") {
-        const filter = url.searchParams.get("filter") ?? "{}"
-        let data = listed
-        try {
-          const parsed = JSON.parse(filter) as Record<string, unknown>
-          data = listed.filter((doc) =>
-            Object.entries(parsed).every(([key, value]) => doc[key] === value)
-          )
-        } catch {
-          data = listed
+        if (path.endsWith("/admin/collections") && method === "GET") {
+          return json({
+            success: true,
+            data: [
+              {
+                name: "users",
+                fields: ["_id", "deviceId", "locale", "createdAt"],
+                kind: "users",
+              },
+            ],
+          })
         }
-        return json({ success: true, data })
-      }
 
-      if (path.endsWith("/admin/collections/users") && method === "POST") {
-        const body = JSON.parse(String(init?.body)) as Record<string, unknown>
-        const created = {
-          _id: "u2",
-          deviceId: body.deviceId,
-          locale: body.locale,
-          createdAt: USER_DOC.createdAt,
+        if (path.endsWith("/admin/collections/users") && method === "GET") {
+          const filter = url.searchParams.get("filter") ?? "{}"
+          const data = (() => {
+            try {
+              const parsed = JSON.parse(filter) as Record<string, unknown>
+              return listed.filter((doc) =>
+                Object.entries(parsed).every(
+                  ([key, value]) => doc[key] === value
+                )
+              )
+            } catch {
+              return listed
+            }
+          })()
+          return json({ success: true, data })
         }
-        listed.unshift(created)
-        return json({ success: true, data: created })
-      }
 
-      if (path.endsWith("/admin/collections/users/u1") && method === "PATCH") {
-        const body = JSON.parse(String(init?.body)) as Record<string, unknown>
-        Object.assign(listed[0], body, { _id: "u1" })
-        return json({ success: true, data: listed[0] })
-      }
-
-      if (path.endsWith("/admin/collections/users/u1") && method === "DELETE") {
-        const index = listed.findIndex((doc) => doc._id === "u1")
-        if (index >= 0) {
-          listed.splice(index, 1)
+        if (path.endsWith("/admin/collections/users") && method === "POST") {
+          const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+          const created = {
+            _id: "u2",
+            deviceId: body.deviceId,
+            locale: body.locale,
+            createdAt: USER_DOC.createdAt,
+          }
+          listed.unshift(created)
+          return json({ success: true, data: created })
         }
-        return new Response(null, { status: 204 })
-      }
 
-      return json({ success: false, error: "NOT_FOUND" }, 404)
-    })
+        if (
+          path.endsWith("/admin/collections/users/u1") &&
+          method === "PATCH"
+        ) {
+          const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+          Object.assign(listed[0], body, { _id: "u1" })
+          return json({ success: true, data: listed[0] })
+        }
+
+        if (
+          path.endsWith("/admin/collections/users/u1") &&
+          method === "DELETE"
+        ) {
+          const index = listed.findIndex((doc) => doc._id === "u1")
+          if (index >= 0) {
+            listed.splice(index, 1)
+          }
+          return new Response(null, { status: 204 })
+        }
+
+        return json({ success: false, error: "NOT_FOUND" }, 404)
+      }
+    )
   }
 
   it("creates a document via POST and reloads skip 0", async () => {
@@ -246,7 +263,9 @@ describe("operator dashboard", () => {
     await user.click(await screen.findByText("dev1"))
 
     expect(
-      await screen.findByText(/Updates keys in this JSON; omitted keys are kept/)
+      await screen.findByText(
+        /Updates keys in this JSON; omitted keys are kept/
+      )
     ).toBeInTheDocument()
     const editor = await screen.findByLabelText("Document JSON")
     expect((editor as HTMLTextAreaElement).value).toContain('"_id": "u1"')
@@ -267,7 +286,12 @@ describe("operator dashboard", () => {
     sessionStorage.setItem(ADMIN_TOKEN_KEY, TOKEN)
     mockUsersCollection([
       { ...USER_DOC },
-      { _id: "u2", deviceId: "dev2", locale: "tr", createdAt: USER_DOC.createdAt },
+      {
+        _id: "u2",
+        deviceId: "dev2",
+        locale: "tr",
+        createdAt: USER_DOC.createdAt,
+      },
     ])
 
     renderApp("/collections/users")
@@ -306,31 +330,36 @@ describe("operator dashboard", () => {
     const user = userEvent.setup()
     sessionStorage.setItem(ADMIN_TOKEN_KEY, TOKEN)
 
-    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input)
-      const method = init?.method ?? "GET"
-      const path = url.pathname
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input)
+        const method = init?.method ?? "GET"
+        const path = url.pathname
 
-      if (path.endsWith("/admin/collections") && method === "GET") {
-        return json({
-          success: true,
-          data: [
-            {
-              name: "users",
-              fields: ["_id", "deviceId", "locale", "createdAt"],
-              kind: "users",
-            },
-          ],
-        })
+        if (path.endsWith("/admin/collections") && method === "GET") {
+          return json({
+            success: true,
+            data: [
+              {
+                name: "users",
+                fields: ["_id", "deviceId", "locale", "createdAt"],
+                kind: "users",
+              },
+            ],
+          })
+        }
+        if (path.endsWith("/admin/collections/users") && method === "GET") {
+          return json({ success: true, data: [USER_DOC] })
+        }
+        if (
+          path.endsWith("/admin/collections/users/u1") &&
+          method === "DELETE"
+        ) {
+          return json({ success: false, error: "REQUEST_FAILED" }, 500)
+        }
+        return json({ success: false, error: "NOT_FOUND" }, 404)
       }
-      if (path.endsWith("/admin/collections/users") && method === "GET") {
-        return json({ success: true, data: [USER_DOC] })
-      }
-      if (path.endsWith("/admin/collections/users/u1") && method === "DELETE") {
-        return json({ success: false, error: "REQUEST_FAILED" }, 500)
-      }
-      return json({ success: false, error: "NOT_FOUND" }, 404)
-    })
+    )
 
     renderApp("/collections/users")
     await user.click(await screen.findByText("dev1"))
@@ -349,7 +378,9 @@ describe("operator dashboard", () => {
 
     renderApp("/")
 
-    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "Overview" })
+    ).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Sign out" }))
 
     expect(await screen.findByLabelText("Admin token")).toBeInTheDocument()
@@ -360,33 +391,54 @@ describe("operator dashboard", () => {
     const user = userEvent.setup()
     sessionStorage.setItem(ADMIN_TOKEN_KEY, TOKEN)
 
-    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
-      const method = init?.method ?? "GET"
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        const method = init?.method ?? "GET"
 
-      if (url.includes("/admin/collections") && !url.includes("/admin/collections/")) {
-        return json({ success: true, data: [] })
+        if (
+          url.includes("/admin/collections") &&
+          !url.includes("/admin/collections/")
+        ) {
+          return json({ success: true, data: [] })
+        }
+        if (url.includes("/admin/push/devices")) {
+          return json({
+            success: true,
+            data: [DEVICE],
+          })
+        }
+        if (url.includes("/admin/push/deliveries")) {
+          return json({
+            success: true,
+            data: [
+              {
+                _id: "dlv_failed",
+                deviceId: "dev_abc123",
+                title: "Earlier push",
+                status: "failed",
+                errorCode: "TRANSIENT",
+                errorMessage: "getaddrinfo ENOTFOUND exp.host",
+                createdAt: "2026-09-12T00:00:00.000Z",
+              },
+            ],
+          })
+        }
+        if (method === "POST" && url.endsWith("/admin/push/send")) {
+          return json({ success: false, error: "NO_DEVICE" }, 404)
+        }
+        return json({ success: false, error: "NOT_FOUND" }, 404)
       }
-      if (url.includes("/admin/push/devices")) {
-        return json({
-          success: true,
-          data: [DEVICE],
-        })
-      }
-      if (url.includes("/admin/push/deliveries")) {
-        return json({ success: true, data: [] })
-      }
-      if (method === "POST" && url.endsWith("/admin/push/send")) {
-        return json({ success: false, error: "NO_DEVICE" }, 404)
-      }
-      return json({ success: false, error: "NOT_FOUND" }, 404)
-    })
+    )
 
     renderApp("/push")
 
     await user.type(screen.getByLabelText("Device query"), "dev_abc")
     await user.click(screen.getByRole("button", { name: "Search" }))
     await user.click(await screen.findByText("dev_abc123"))
+    expect(
+      await screen.findByText("getaddrinfo ENOTFOUND exp.host")
+    ).toBeInTheDocument()
     await user.type(screen.getByLabelText("Title"), "Hello")
     await user.type(screen.getByLabelText("Body"), "World")
     await user.click(screen.getByRole("button", { name: "Send" }))
@@ -399,35 +451,49 @@ describe("operator dashboard", () => {
     const user = userEvent.setup()
     sessionStorage.setItem(ADMIN_TOKEN_KEY, TOKEN)
 
-    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
-      const method = init?.method ?? "GET"
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        const method = init?.method ?? "GET"
 
-      if (url.includes("/admin/collections") && !url.includes("/admin/collections/")) {
-        return json({ success: true, data: [] })
+        if (
+          url.includes("/admin/collections") &&
+          !url.includes("/admin/collections/")
+        ) {
+          return json({ success: true, data: [] })
+        }
+        if (url.includes("/admin/push/devices")) {
+          return json({ success: true, data: [DEVICE] })
+        }
+        if (url.includes("/admin/push/deliveries")) {
+          return json({
+            success: true,
+            data: [
+              {
+                _id: "dlv_1",
+                deviceId: "dev_abc123",
+                status: "submitted",
+                title: "Hello",
+                createdAt: "2026-09-12T00:00:00.000Z",
+              },
+            ],
+          })
+        }
+        if (method === "POST" && url.endsWith("/admin/push/send")) {
+          expect(JSON.parse(String(init?.body))).toMatchObject({
+            deviceId: "dev_abc123",
+            title: "Hello",
+            body: "World",
+            imageUrl: "https://cdn.oknok.app/single-push.jpg",
+          })
+          return json({
+            success: true,
+            data: [{ deviceId: "dev_abc123", status: "submitted" }],
+          })
+        }
+        return json({ success: false, error: "NOT_FOUND" }, 404)
       }
-      if (url.includes("/admin/push/devices")) {
-        return json({ success: true, data: [DEVICE] })
-      }
-      if (url.includes("/admin/push/deliveries")) {
-        return json({
-          success: true,
-          data: [
-            {
-              _id: "dlv_1",
-              deviceId: "dev_abc123",
-              status: "submitted",
-              title: "Hello",
-              createdAt: "2026-09-12T00:00:00.000Z",
-            },
-          ],
-        })
-      }
-      if (method === "POST" && url.endsWith("/admin/push/send")) {
-        return json({ success: true })
-      }
-      return json({ success: false, error: "NOT_FOUND" }, 404)
-    })
+    )
 
     renderApp("/push")
 
@@ -436,10 +502,65 @@ describe("operator dashboard", () => {
     await user.click(await screen.findByText("dev_abc123"))
     await user.type(screen.getByLabelText("Title"), "Hello")
     await user.type(screen.getByLabelText("Body"), "World")
+    await user.type(
+      screen.getByLabelText("Image URL"),
+      "https://cdn.oknok.app/single-push.jpg"
+    )
     await user.click(screen.getByRole("button", { name: "Send" }))
 
     expect(await screen.findByText("Push sent")).toBeInTheDocument()
     expect(await screen.findByText("submitted")).toBeInTheDocument()
+  })
+
+  it("reports a failed 200 transport result instead of a false Push sent toast", async () => {
+    const user = userEvent.setup()
+    sessionStorage.setItem(ADMIN_TOKEN_KEY, TOKEN)
+
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        const method = init?.method ?? "GET"
+        if (
+          url.includes("/admin/collections") &&
+          !url.includes("/admin/collections/")
+        ) {
+          return json({ success: true, data: [] })
+        }
+        if (url.includes("/admin/push/devices")) {
+          return json({ success: true, data: [DEVICE] })
+        }
+        if (url.includes("/admin/push/deliveries")) {
+          return json({ success: true, data: [] })
+        }
+        if (method === "POST" && url.endsWith("/admin/push/send")) {
+          return json({
+            success: true,
+            data: [
+              {
+                deviceId: "dev_abc123",
+                status: "failed",
+                errorCode: "TRANSIENT",
+                errorMessage: "getaddrinfo ENOTFOUND exp.host",
+              },
+            ],
+          })
+        }
+        return json({ success: false, error: "NOT_FOUND" }, 404)
+      }
+    )
+
+    renderApp("/push")
+    await user.type(screen.getByLabelText("Device query"), "dev_abc")
+    await user.click(screen.getByRole("button", { name: "Search" }))
+    await user.click(await screen.findByText("dev_abc123"))
+    await user.type(screen.getByLabelText("Title"), "Hello")
+    await user.type(screen.getByLabelText("Body"), "World")
+    await user.click(screen.getByRole("button", { name: "Send" }))
+
+    expect(
+      await screen.findByText("TRANSIENT: getaddrinfo ENOTFOUND exp.host")
+    ).toBeInTheDocument()
+    expect(screen.queryByText("Push sent")).not.toBeInTheDocument()
   })
 
   it("lists collections on /collections, not as the home heading", async () => {
@@ -459,8 +580,12 @@ describe("operator dashboard", () => {
 
     renderApp("/collections")
 
-    expect(await screen.findByRole("heading", { name: "Collections" })).toBeInTheDocument()
-    expect(screen.queryByRole("heading", { name: "Overview" })).not.toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "Collections" })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole("heading", { name: "Overview" })
+    ).not.toBeInTheDocument()
   })
 
   it("does not N+1 every model on overview", async () => {
@@ -473,7 +598,11 @@ describe("operator dashboard", () => {
           data: [
             { name: "users", fields: ["_id"], kind: "users" },
             { name: "push_devices", fields: ["_id"], kind: "push_devices" },
-            { name: "push_deliveries", fields: ["_id"], kind: "push_deliveries" },
+            {
+              name: "push_deliveries",
+              fields: ["_id"],
+              kind: "push_deliveries",
+            },
             { name: "notes", fields: ["_id"], kind: "model" },
           ],
         })
@@ -485,14 +614,24 @@ describe("operator dashboard", () => {
     })
 
     renderApp("/")
-    expect(await screen.findByRole("heading", { name: "Overview" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "Overview" })
+    ).toBeInTheDocument()
     await waitFor(() => {
       expect(fetchMock.mock.calls.length).toBeGreaterThan(1)
     })
-    const paths = fetchMock.mock.calls.map((call) => requestUrl(call[0] as RequestInfo).pathname)
-    expect(paths.filter((p) => p.endsWith("/admin/collections"))).toHaveLength(1)
-    expect(paths.some((p) => p.endsWith("/admin/collections/notes"))).toBe(false)
-    expect(paths.filter((p) => p.includes("/admin/collections/")).length).toBe(3)
+    const paths = fetchMock.mock.calls.map(
+      (call) => requestUrl(call[0] as RequestInfo).pathname
+    )
+    expect(paths.filter((p) => p.endsWith("/admin/collections"))).toHaveLength(
+      1
+    )
+    expect(paths.some((p) => p.endsWith("/admin/collections/notes"))).toBe(
+      false
+    )
+    expect(paths.filter((p) => p.includes("/admin/collections/")).length).toBe(
+      3
+    )
   })
 
   it("opens a full-page lightbox from an image cell", async () => {
@@ -547,38 +686,42 @@ describe("operator dashboard", () => {
     const user = userEvent.setup()
     sessionStorage.setItem(ADMIN_TOKEN_KEY, TOKEN)
 
-    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = requestUrl(input)
-      const method = init?.method ?? "GET"
-      const path = url.pathname
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = requestUrl(input)
+        const method = init?.method ?? "GET"
+        const path = url.pathname
 
-      if (path.endsWith("/admin/collections") && method === "GET") {
-        return json({
-          success: true,
-          data: [
-            {
-              name: "users",
-              fields: ["_id", "deviceId", "locale", "createdAt"],
-              kind: "users",
-            },
-          ],
-        })
+        if (path.endsWith("/admin/collections") && method === "GET") {
+          return json({
+            success: true,
+            data: [
+              {
+                name: "users",
+                fields: ["_id", "deviceId", "locale", "createdAt"],
+                kind: "users",
+              },
+            ],
+          })
+        }
+        if (path.endsWith("/admin/collections/users") && method === "GET") {
+          return json({ success: true, data: [USER_DOC] })
+        }
+        if (url.href.includes("/admin/push/devices")) {
+          return json({ success: true, data: [DEVICE] })
+        }
+        if (url.href.includes("/admin/push/deliveries")) {
+          return json({ success: true, data: [] })
+        }
+        return json({ success: false, error: "NOT_FOUND" }, 404)
       }
-      if (path.endsWith("/admin/collections/users") && method === "GET") {
-        return json({ success: true, data: [USER_DOC] })
-      }
-      if (url.href.includes("/admin/push/devices")) {
-        return json({ success: true, data: [DEVICE] })
-      }
-      if (url.href.includes("/admin/push/deliveries")) {
-        return json({ success: true, data: [] })
-      }
-      return json({ success: false, error: "NOT_FOUND" }, 404)
-    })
+    )
 
     renderApp("/collections/users")
     await user.click(await screen.findByRole("button", { name: "Send push" }))
-    expect(await screen.findByRole("heading", { name: "Push" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("heading", { name: "Push" })
+    ).toBeInTheDocument()
     expect(screen.getByLabelText("Device query")).toHaveValue("dev1")
   })
 })

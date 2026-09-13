@@ -3,6 +3,7 @@ import {
   DatabaseIcon,
   LayoutDashboardIcon,
   LogOutIcon,
+  RouteIcon,
   SendIcon,
 } from "lucide-react"
 import { useState } from "react"
@@ -37,6 +38,7 @@ const NAV = [
   { to: "/", label: "Overview", icon: LayoutDashboardIcon, end: true },
   { to: "/collections", label: "Collections", icon: DatabaseIcon, end: false },
   { to: "/push", label: "Push", icon: SendIcon, end: true },
+  { to: "/journeys", label: "Journeys", icon: RouteIcon, end: true },
 ] as const
 
 function crumbLabel(pathname: string, collectionName?: string): string {
@@ -45,6 +47,9 @@ function crumbLabel(pathname: string, collectionName?: string): string {
   }
   if (pathname === "/push") {
     return "Push"
+  }
+  if (pathname === "/journeys") {
+    return "Journeys"
   }
   if (pathname === "/collections") {
     return "Collections"
@@ -76,11 +81,14 @@ export function AppShell() {
   return (
     <SidebarProvider defaultOpen={openByDefault} className="w-full min-w-0">
       <Sidebar collapsible="icon">
-        <nav aria-label="Console" className="flex min-h-0 w-full flex-1 flex-col">
+        <nav
+          aria-label="Console"
+          className="flex min-h-0 w-full flex-1 flex-col"
+        >
           <SidebarHeader>
             <Link
               to="/"
-              className="flex h-9 items-center gap-2 px-2 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-colors hover:bg-sidebar-accent focus-visible:ring-2 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0!"
+              className="flex h-9 items-center gap-2 px-2 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-colors group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0! hover:bg-sidebar-accent focus-visible:ring-2"
             >
               <span className="flex size-6 shrink-0 items-center justify-center bg-primary font-mono text-[10px] font-medium text-primary-foreground">
                 Cx
@@ -108,7 +116,10 @@ export function AppShell() {
                           tooltip={item.label}
                           className="data-active:border-l-2 data-active:border-l-primary"
                         >
-                          <Link to={item.to} aria-current={isActive ? "page" : undefined}>
+                          <Link
+                            to={item.to}
+                            aria-current={isActive ? "page" : undefined}
+                          >
                             <item.icon />
                             <span>{item.label}</span>
                           </Link>
