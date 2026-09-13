@@ -407,11 +407,20 @@ export function JourneysPage() {
         setError(payload.error)
         return
       }
+      const selectedStepIndex = Math.max(
+        0,
+        editor.steps.findIndex((step) => step.clientId === testStepClientId)
+      )
+      const stepId = currentEditor.steps[selectedStepIndex]?.id
+      if (!stepId) {
+        setError("Select a device and step")
+        return
+      }
       const saved = await updateJourneyDraft(selected._id, payload.value)
       replaceJourney(saved)
       const results = await testJourneyStep(selected._id, {
         deviceId: testDevice.deviceId,
-        stepId: testStep.id,
+        stepId,
       })
       if (results.length === 0) {
         setError("NO_DEVICE")

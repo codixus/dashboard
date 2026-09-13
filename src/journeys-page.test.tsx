@@ -394,10 +394,24 @@ describe("journeys page", () => {
 
     renderApp("/journeys")
     await screen.findByDisplayValue("Purchase nurture")
-    await user.clear(screen.getByLabelText("Step 1 ID"))
-    await user.type(screen.getByLabelText("Step 1 ID"), "updated-thank-you")
-    await user.clear(screen.getByLabelText("Step 1 title"))
-    await user.type(screen.getByLabelText("Step 1 title"), "Updated test title")
+    await user.click(screen.getByRole("button", { name: "JSON" }))
+    fireEvent.change(screen.getByLabelText("Journey JSON"), {
+      target: {
+        value: JSON.stringify({
+          name: JOURNEY.name,
+          definition: {
+            ...JOURNEY.draft,
+            steps: [
+              {
+                ...JOURNEY.draft.steps[0],
+                id: "updated-thank-you",
+                title: "Updated test title",
+              },
+            ],
+          },
+        }),
+      },
+    })
     await user.type(screen.getByLabelText("Test device"), "device-123")
     await user.click(screen.getByRole("button", { name: "Search devices" }))
     await user.click(await screen.findByRole("button", { name: /device-123/ }))
