@@ -18,13 +18,13 @@ describe("dashboard brand", () => {
     expect(resolveDashboardBrand({})).toEqual(DEFAULT_DASHBOARD_BRAND)
   })
 
-  it("resolves the complete OKNOK identity and palette from env", () => {
+  it("resolves a complete deployment identity and palette from env", () => {
     const brand = resolveDashboardBrand({
-      VITE_DASHBOARD_NAME: " OK or NOK? ",
-      VITE_DASHBOARD_SHORT_NAME: "OK",
-      VITE_DASHBOARD_TITLE: "OK or NOK? · Growth Console",
-      VITE_DASHBOARD_DESCRIPTION: "Players and push delivery.",
-      VITE_DASHBOARD_FAVICON_URL: "https://oknok.app/icon.png",
+      VITE_DASHBOARD_NAME: " Sample Console ",
+      VITE_DASHBOARD_SHORT_NAME: "SC",
+      VITE_DASHBOARD_TITLE: "Sample Console | Growth",
+      VITE_DASHBOARD_DESCRIPTION: "Users and push delivery.",
+      VITE_DASHBOARD_FAVICON_URL: "https://sample.example.com/icon.png",
       VITE_DASHBOARD_BACKGROUND_COLOR: "#F8F7FF",
       VITE_DASHBOARD_SURFACE_COLOR: "#FFFFFF",
       VITE_DASHBOARD_FOREGROUND_COLOR: "#1F2937",
@@ -41,8 +41,8 @@ describe("dashboard brand", () => {
       VITE_DASHBOARD_CHART_5_COLOR: "#F59E0B",
     })
 
-    expect(brand.name).toBe("OK or NOK?")
-    expect(brand.shortName).toBe("OK")
+    expect(brand.name).toBe("Sample Console")
+    expect(brand.shortName).toBe("SC")
     expect(brand.colors).toMatchObject({
       background: "#F8F7FF",
       primary: "#9333EA",
@@ -53,26 +53,26 @@ describe("dashboard brand", () => {
 
   it("applies metadata, favicon, and CSS variables to the document", () => {
     const brand = resolveDashboardBrand({
-      VITE_DASHBOARD_NAME: "OK or NOK?",
-      VITE_DASHBOARD_TITLE: "OK or NOK? · Growth Console",
-      VITE_DASHBOARD_DESCRIPTION: "Players and push delivery.",
-      VITE_DASHBOARD_FAVICON_URL: "https://oknok.app/icon.png",
+      VITE_DASHBOARD_NAME: "Sample Console",
+      VITE_DASHBOARD_TITLE: "Sample Console | Growth",
+      VITE_DASHBOARD_DESCRIPTION: "Users and push delivery.",
+      VITE_DASHBOARD_FAVICON_URL: "https://sample.example.com/icon.png",
       VITE_DASHBOARD_PRIMARY_COLOR: "#9333EA",
     })
 
     applyDashboardBrand(brand, document)
 
-    expect(document.title).toBe("OK or NOK? · Growth Console")
+    expect(document.title).toBe("Sample Console | Growth")
     expect(
       document.head.querySelector<HTMLMetaElement>(
         'meta[name="description"][data-dashboard-brand="true"]'
       )?.content
-    ).toBe("Players and push delivery.")
+    ).toBe("Users and push delivery.")
     expect(
       document.head.querySelector<HTMLLinkElement>(
         'link[rel="icon"][data-dashboard-brand="true"]'
       )?.href
-    ).toBe("https://oknok.app/icon.png")
+    ).toBe("https://sample.example.com/icon.png")
     expect(document.documentElement.style.getPropertyValue("--primary")).toBe(
       "#9333EA"
     )

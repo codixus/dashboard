@@ -27,7 +27,7 @@ function validState(
         delayUnit: "minutes",
         title: "Thanks",
         body: "Your bonus is ready.",
-        imageUrl: "https://cdn.oknok.app/bonus.jpg",
+        imageUrl: "https://cdn.example.com/bonus.jpg",
         route: "/menu",
         dataText: '{"campaign":"purchase-thanks"}',
         translations: [],
@@ -88,7 +88,7 @@ describe("journey editor validation", () => {
               offsetSeconds: 1800,
               title: "Thanks",
               body: "Your bonus is ready.",
-              imageUrl: "https://cdn.oknok.app/bonus.jpg",
+              imageUrl: "https://cdn.example.com/bonus.jpg",
               data: { campaign: "purchase-thanks", route: "/menu" },
             },
             {
@@ -112,7 +112,7 @@ describe("journey editor validation", () => {
           locale: "tr_TR",
           title: "Teşekkürler",
           body: "Bonusun hazır.",
-          imageUrl: "https://cdn.oknok.app/bonus-tr.jpg",
+          imageUrl: "https://cdn.example.com/bonus-tr.jpg",
         },
       ],
     })
@@ -125,7 +125,7 @@ describe("journey editor validation", () => {
       "tr-TR": {
         title: "Teşekkürler",
         body: "Bonusun hazır.",
-        imageUrl: "https://cdn.oknok.app/bonus-tr.jpg",
+        imageUrl: "https://cdn.example.com/bonus-tr.jpg",
       },
     })
   })
@@ -181,7 +181,13 @@ describe("journey editor validation", () => {
     ["invalid locale", "not a locale", "Başlık", "Mesaj", ""],
     ["missing title", "tr", "", "Mesaj", ""],
     ["missing message", "tr", "Başlık", "", ""],
-    ["insecure image", "tr", "Başlık", "Mesaj", "http://cdn.oknok.app/tr.jpg"],
+    [
+      "insecure image",
+      "tr",
+      "Başlık",
+      "Mesaj",
+      "http://cdn.example.com/tr.jpg",
+    ],
   ])(
     "rejects localized content with %s",
     (_label, locale, title, body, imageUrl) => {
@@ -214,7 +220,7 @@ describe("journey editor validation", () => {
         steps: [
           {
             ...validState().steps[0],
-            imageUrl: "http://cdn.oknok.app/bonus.jpg",
+            imageUrl: "http://cdn.example.com/bonus.jpg",
           },
         ],
       }),

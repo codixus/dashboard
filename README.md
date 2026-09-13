@@ -10,15 +10,18 @@ cp .env.example .env
 bun run dev
 ```
 
-`VITE_API_URL` is the API host prefix (default `http://localhost:3001/oknok`). Example production value: `https://api.codixus.com/oknok`.
+The repository contains no app-specific API URL or branding profile. `bun run dev` and `bun run build` read the required lowercase `appslug` variable, fetch `GET /api/v1/dashboard-configs/:appSlug` from the Codixus backend, validate the complete public configuration, and expose only the allowlisted values to Vite.
 
-All visible product branding is deployment configuration. `VITE_DASHBOARD_NAME`, `VITE_DASHBOARD_SHORT_NAME`, `VITE_DASHBOARD_TITLE`, `VITE_DASHBOARD_DESCRIPTION`, and `VITE_DASHBOARD_FAVICON_URL` control identity and browser metadata. The `VITE_DASHBOARD_*_COLOR` variables control the light palette and charts. `.env.production` contains the public OK or NOK? production profile so the connected Cloudflare build is deterministic. Deployment-level environment variables override it when this repository is reused for another panel. `.env.example` remains the local setup template. Missing or invalid branding values fall back to a neutral dashboard identity and palette.
+For Cloudflare Workers Builds, set one build variable: `appslug=<registered-app-slug>`. Do not add `VITE_*` branding variables to the deployment. A missing slug, unknown app, unavailable config endpoint, or invalid response stops the build instead of producing a dashboard with the wrong identity.
+
+Local development can point to a local control plane with `DASHBOARD_CONFIG_BASE_URL`; see `.env.example`. This override is not required in Cloudflare.
 
 The admin token is typed on the login screen. It is stored in `sessionStorage` under `codixus.adminToken` and sent as `X-Codixus-Admin` on every request. Do not put the token in `VITE_*` env vars; those values are compiled into the client bundle.
 
 ## Scripts
 
-- `bun run dev` - Vite dev server
+- `bun run dev` - fetch config, then start the Vite dev server
+- `bun run ci:build` - run the configured build against a product-neutral local config API fixture
 - `bun run test` - Vitest
 - `bun run typecheck` - TypeScript project build
-- `bun run build` - production build
+- `bun run build` - typecheck, fetch config, then create the production build

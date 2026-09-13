@@ -22,7 +22,7 @@ const JOURNEY: PushJourney = {
         offsetSeconds: 1800,
         title: "Thanks",
         body: "Your bonus is ready.",
-        imageUrl: "https://cdn.oknok.app/bonus.jpg",
+        imageUrl: "https://cdn.example.com/bonus.jpg",
         data: { route: "/menu", campaign: "purchase-thanks" },
       },
     ],
@@ -143,12 +143,12 @@ describe("journeys page", () => {
                   offsetSeconds: 1800,
                   title: "Thanks",
                   body: "Your bonus is ready.",
-                  imageUrl: "https://cdn.oknok.app/bonus.jpg",
+                  imageUrl: "https://cdn.example.com/bonus.jpg",
                   translations: {
                     "tr-TR": {
                       title: "Teşekkürler",
                       body: "Bonusun hazır.",
-                      imageUrl: "https://cdn.oknok.app/bonus-tr.jpg",
+                      imageUrl: "https://cdn.example.com/bonus-tr.jpg",
                     },
                   },
                   data: { campaign: "purchase-thanks", route: "/menu" },
@@ -187,7 +187,7 @@ describe("journeys page", () => {
     )
     await user.type(
       screen.getByLabelText("Step 1 image URL"),
-      "https://cdn.oknok.app/bonus.jpg"
+      "https://cdn.example.com/bonus.jpg"
     )
     await user.click(screen.getByRole("button", { name: "Add translation" }))
     await user.type(
@@ -204,7 +204,7 @@ describe("journeys page", () => {
     )
     await user.type(
       screen.getByLabelText("Step 1 translation 1 image URL"),
-      "https://cdn.oknok.app/bonus-tr.jpg"
+      "https://cdn.example.com/bonus-tr.jpg"
     )
     await user.type(screen.getByLabelText("Step 1 route"), "/menu")
     fireEvent.change(screen.getByLabelText("Step 1 data JSON"), {
@@ -244,7 +244,7 @@ describe("journeys page", () => {
     fireEvent.change(screen.getByLabelText("Journey JSON"), {
       target: {
         value: JSON.stringify({
-          name: "OKNOK welcome",
+          name: "Sample welcome",
           definition: {
             entryEvent: "user_created",
             steps: [
@@ -270,7 +270,7 @@ describe("journeys page", () => {
 
     await screen.findByText("Draft created")
     expect(posted).toMatchObject({
-      name: "OKNOK welcome",
+      name: "Sample welcome",
       definition: {
         entryEvent: "user_created",
         steps: [
