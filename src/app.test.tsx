@@ -525,7 +525,7 @@ describe("operator dashboard", () => {
             deviceId: "dev_abc123",
             title: "Hello",
             body: "World",
-            imageUrl: "https://cdn.oknok.app/single-push.jpg",
+            imageUrl: "https://cdn.example.com/single-push.jpg",
           })
           return json({
             success: true,
@@ -545,7 +545,7 @@ describe("operator dashboard", () => {
     await user.type(screen.getByLabelText("Body"), "World")
     await user.type(
       screen.getByLabelText("Image URL"),
-      "https://cdn.oknok.app/single-push.jpg"
+      "https://cdn.example.com/single-push.jpg"
     )
     await user.click(screen.getByRole("button", { name: "Send" }))
 

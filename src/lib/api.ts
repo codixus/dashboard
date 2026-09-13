@@ -11,7 +11,7 @@ import type {
   PushSendResult,
 } from "@/lib/types"
 
-export const DEFAULT_API_URL = "http://localhost:3001/oknok"
+export const DEFAULT_API_URL = "http://localhost:3001"
 export const ADMIN_HEADER = "X-Codixus-Admin"
 
 export class ApiError extends Error {

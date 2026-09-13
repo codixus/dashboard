@@ -4,8 +4,9 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "bun scripts/vite-with-config.ts dev",
+    "build": "tsc -b && bun scripts/vite-with-config.ts build",
+    "ci:build": "bun scripts/ci-build.ts",
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc -b",
