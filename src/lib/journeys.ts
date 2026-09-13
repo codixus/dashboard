@@ -300,10 +300,10 @@ export function buildJourneyPayload(
     }
 
     const translationDrafts = draft.translations ?? []
-    if (translationDrafts.length > 20) {
+    if (translationDrafts.length > 32) {
       return {
         ok: false,
-        error: `Step ${number} can have at most 20 translations`,
+        error: `Step ${number} can have at most 32 translations`,
       }
     }
     const translations: NonNullable<PushJourneyStep["translations"]> = {}

@@ -862,7 +862,7 @@ export function JourneysPage() {
                                   type="button"
                                   variant="outline"
                                   size="sm"
-                                  disabled={step.translations.length >= 20}
+                                  disabled={step.translations.length >= 32}
                                   onClick={() =>
                                     updateStep(step.clientId, (current) => ({
                                       ...current,
