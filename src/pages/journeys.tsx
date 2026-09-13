@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react"
 import {
+  ChartNoAxesCombinedIcon,
   PlusIcon,
   RefreshCwIcon,
   SendIcon,
   SmartphoneIcon,
   Trash2Icon,
 } from "lucide-react"
+import { Link } from "react-router"
 import { toast } from "sonner"
 
 import {
@@ -538,6 +540,16 @@ export function JourneysPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
+                    {selected ? (
+                      <Button asChild type="button" size="sm" variant="outline">
+                        <Link
+                          to={`/journeys/${encodeURIComponent(selected._id)}/stats`}
+                        >
+                          <ChartNoAxesCombinedIcon data-icon="inline-start" />
+                          View stats
+                        </Link>
+                      </Button>
+                    ) : null}
                     <div className="flex rounded-lg border p-0.5">
                       <Button
                         type="button"

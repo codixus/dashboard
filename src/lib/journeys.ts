@@ -12,7 +12,7 @@ export const BUILT_IN_JOURNEY_EVENTS = [
   {
     value: "user_created",
     label: "New install / user created",
-    description: "Emitted once when Codixus creates the user.",
+    description: "Emitted once when the user record is created.",
   },
   {
     value: "push_registered",
