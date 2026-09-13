@@ -40,9 +40,83 @@ export type PushDelivery = {
   errorCode?: string
   errorMessage?: string
   idempotencyKey?: string
+  journeyRunId?: string
   createdAt?: string
   openedAt?: string
   receiptedAt?: string
+}
+
+export type PushJourneyRecipientState =
+  "waiting" | "paused" | "sent" | "opened" | "failed" | "exited"
+
+export type PushJourneyStatsSummary = {
+  totalRuns: number
+  enrolled: number
+  reached: number
+  opened: number
+  waiting: number
+  paused: number
+  completed: number
+  failed: number
+  exited: number
+}
+
+export type PushJourneyStatsUser = {
+  _id: string
+  deviceId?: string
+  locale?: string
+  identifiers?: Record<string, unknown>
+  firstSeenIp?: string
+  lastSeenIp?: string
+  createdAt?: string
+  lastSeenAt?: string
+}
+
+export type PushJourneyStatsDevice = {
+  platform?: "ios" | "android"
+  locale?: string
+  timezone?: string
+  appVersion?: string
+  permissionStatus?: string
+  enabled?: boolean
+  lastSeenAt?: string
+}
+
+export type PushJourneyStatsDelivery = {
+  deliveryId: string
+  runId?: string
+  stepId?: string
+  status: "sending" | "submitted" | "failed" | "opened"
+  createdAt: string
+  openedAt?: string
+  receiptedAt?: string
+  errorCode?: string
+  errorMessage?: string
+}
+
+export type PushJourneyStatsParticipant = {
+  runId: string
+  deviceId: string
+  revision: number
+  state: PushJourneyRecipientState
+  runStatus: "active" | "paused" | "completed" | "exited" | "failed"
+  eventOccurredAt: string
+  enrolledAt: string
+  nextStepId?: string
+  nextRunAt?: string
+  completedAt?: string
+  attempts: number
+  lastError?: string
+  user?: PushJourneyStatsUser
+  device?: PushJourneyStatsDevice
+  deliveries: PushJourneyStatsDelivery[]
+}
+
+export type PushJourneyStats = {
+  journey: PushJourney
+  summary: PushJourneyStatsSummary
+  participants: PushJourneyStatsParticipant[]
+  nextSkip?: number
 }
 
 export type PushJourneyAudience = {

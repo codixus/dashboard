@@ -10,6 +10,7 @@ import { useState } from "react"
 
 import { getApiOrigin } from "@/lib/api"
 import { clearAdminToken } from "@/lib/auth"
+import { dashboardBrand } from "@/lib/brand"
 import { Button } from "@/components/ui/button"
 import {
   Breadcrumb,
@@ -38,7 +39,7 @@ const NAV = [
   { to: "/", label: "Overview", icon: LayoutDashboardIcon, end: true },
   { to: "/collections", label: "Collections", icon: DatabaseIcon, end: false },
   { to: "/push", label: "Push", icon: SendIcon, end: true },
-  { to: "/journeys", label: "Journeys", icon: RouteIcon, end: true },
+  { to: "/journeys", label: "Journeys", icon: RouteIcon, end: false },
 ] as const
 
 function crumbLabel(pathname: string, collectionName?: string): string {
@@ -50,6 +51,9 @@ function crumbLabel(pathname: string, collectionName?: string): string {
   }
   if (pathname === "/journeys") {
     return "Journeys"
+  }
+  if (pathname.startsWith("/journeys/") && pathname.endsWith("/stats")) {
+    return "Journey stats"
   }
   if (pathname === "/collections") {
     return "Collections"
@@ -72,6 +76,9 @@ export function AppShell() {
   const collectionCrumb = Boolean(
     collectionName && location.pathname.startsWith("/collections/")
   )
+  const journeyCrumb =
+    location.pathname.startsWith("/journeys/") &&
+    location.pathname.endsWith("/stats")
 
   function signOut() {
     clearAdminToken()
@@ -82,7 +89,7 @@ export function AppShell() {
     <SidebarProvider defaultOpen={openByDefault} className="w-full min-w-0">
       <Sidebar collapsible="icon">
         <nav
-          aria-label="Console"
+          aria-label={`${dashboardBrand.name} console`}
           className="flex min-h-0 w-full flex-1 flex-col"
         >
           <SidebarHeader>
@@ -91,10 +98,10 @@ export function AppShell() {
               className="flex h-9 items-center gap-2 px-2 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-colors group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0! hover:bg-sidebar-accent focus-visible:ring-2"
             >
               <span className="flex size-6 shrink-0 items-center justify-center bg-primary font-mono text-[10px] font-medium text-primary-foreground">
-                Cx
+                {dashboardBrand.shortName}
               </span>
               <span className="truncate text-sm font-medium group-data-[collapsible=icon]:sr-only">
-                Codixus
+                {dashboardBrand.name}
               </span>
             </Link>
           </SidebarHeader>
@@ -161,6 +168,18 @@ export function AppShell() {
                       className="text-muted-foreground transition-colors hover:text-foreground"
                     >
                       Collections
+                    </Link>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator className="hidden sm:inline-flex" />
+                </>
+              ) : journeyCrumb ? (
+                <>
+                  <BreadcrumbItem className="hidden sm:inline-flex">
+                    <Link
+                      to="/journeys"
+                      className="text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      Journeys
                     </Link>
                   </BreadcrumbItem>
                   <BreadcrumbSeparator className="hidden sm:inline-flex" />

@@ -4,8 +4,14 @@ import { toast } from "sonner"
 
 import { ApiError, checkSession, getApiOrigin } from "@/lib/api"
 import { setAdminToken, useAdminToken } from "@/lib/auth"
+import { dashboardBrand } from "@/lib/brand"
 import { Button } from "@/components/ui/button"
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 
@@ -52,13 +58,13 @@ export function LoginPage() {
             Operator
           </p>
           <p className="text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">
-            Codixus
+            {dashboardBrand.name}
           </p>
           <p className="max-w-xs text-sm leading-6 text-primary-foreground/70">
-            Overview, collections, and device push for one API.
+            {dashboardBrand.description}
           </p>
         </div>
-        <p className="truncate font-mono text-xs text-primary-foreground/55 md:whitespace-normal md:break-all">
+        <p className="truncate font-mono text-xs text-primary-foreground/55 md:break-all md:whitespace-normal">
           {apiOrigin}
         </p>
       </aside>
@@ -93,7 +99,7 @@ export function LoginPage() {
                 className="h-11 font-mono"
               />
               <FieldDescription>
-                Header X-Codixus-Admin. Not stored in env.
+                Sent only as the admin authorization header. Not stored in env.
               </FieldDescription>
             </Field>
           </FieldGroup>

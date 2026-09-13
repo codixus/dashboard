@@ -7,6 +7,7 @@ import type {
   PushDevice,
   PushJourney,
   PushJourneyDefinition,
+  PushJourneyStats,
   PushSendResult,
 } from "@/lib/types"
 
@@ -294,6 +295,22 @@ export async function listDeliveries(
 export async function listJourneys(): Promise<PushJourney[]> {
   const result = await adminJson<PushJourney[]>("/admin/push/journeys")
   return result.data ?? []
+}
+
+export async function getJourneyStats(
+  journeyId: string,
+  opts: { limit: number; skip: number }
+): Promise<PushJourneyStats> {
+  const result = await adminJson<PushJourneyStats>(
+    withQuery(
+      `/admin/push/journeys/${encodeURIComponent(journeyId)}/stats`,
+      opts
+    )
+  )
+  return {
+    ...result.data,
+    nextSkip: result.nextSkip ?? result.data.nextSkip,
+  }
 }
 
 export async function createJourney(input: {
