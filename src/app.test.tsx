@@ -215,6 +215,47 @@ describe("operator dashboard", () => {
     )
   }
 
+  it("surfaces structured user context even with legacy collection metadata", async () => {
+    sessionStorage.setItem(ADMIN_TOKEN_KEY, TOKEN)
+    mockUsersCollection([
+      {
+        ...USER_DOC,
+        firstSeenIp: "203.0.113.10",
+        lastSeenIp: "203.0.113.11",
+        identifiers: {
+          revenueCatAppUserId: "dev1",
+          firebaseUserId: "dev1",
+        },
+        device: {
+          platform: "ios",
+          model: "iPhone 16 Pro",
+          appVersion: "1.4.0",
+        },
+        properties: { plan: "premium", onboardingComplete: true },
+      },
+    ])
+
+    renderApp("/collections/users")
+
+    expect(
+      await screen.findByRole("columnheader", { name: "firstSeenIp" })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("columnheader", { name: "lastSeenIp" })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("columnheader", { name: "identifiers" })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("columnheader", { name: "device" })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("columnheader", { name: "properties" })
+    ).toBeInTheDocument()
+    expect(screen.getByText("203.0.113.11")).toBeInTheDocument()
+    expect(screen.getByText(/iPhone 16 Pro/)).toBeInTheDocument()
+  })
+
   it("creates a document via POST and reloads skip 0", async () => {
     const user = userEvent.setup()
     sessionStorage.setItem(ADMIN_TOKEN_KEY, TOKEN)

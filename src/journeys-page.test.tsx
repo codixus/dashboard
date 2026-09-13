@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react"
+import { fireEvent, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -52,6 +52,66 @@ describe("journeys page", () => {
     vi.stubGlobal("fetch", fetchMock)
   })
 
+  it("starts with no event selected and offers friendly built-in events", async () => {
+    const user = userEvent.setup()
+    fetchMock.mockResolvedValue(json({ success: true, data: [] }))
+
+    renderApp("/journeys")
+    await screen.findByText("No journeys yet")
+    await user.click(screen.getByRole("button", { name: "New journey" }))
+
+    const entryEvent = screen.getByRole("combobox", { name: "Entry event" })
+    expect(entryEvent).toHaveValue("")
+    expect(
+      within(entryEvent).getByRole("option", {
+        name: "New install / user created",
+      })
+    ).toHaveValue("user_created")
+    expect(
+      within(entryEvent).getByRole("option", { name: "Custom event…" })
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole("combobox", { name: "Audience event" })
+    ).not.toBeInTheDocument()
+  })
+
+  it("preserves an unknown event through the custom event editor", async () => {
+    fetchMock.mockResolvedValue(
+      json({
+        success: true,
+        data: [
+          {
+            ...JOURNEY,
+            draft: { ...JOURNEY.draft, entryEvent: "wardrobe_scanned" },
+          },
+        ],
+      })
+    )
+
+    renderApp("/journeys")
+
+    expect(
+      await screen.findByRole("combobox", { name: "Entry event" })
+    ).toHaveValue("custom")
+    expect(screen.getByLabelText("Custom entry event name")).toHaveValue(
+      "wardrobe_scanned"
+    )
+  })
+
+  it("uses a single-column workspace with the journey list before the editor", async () => {
+    fetchMock.mockResolvedValue(json({ success: true, data: [JOURNEY] }))
+
+    renderApp("/journeys")
+
+    const workspace = await screen.findByTestId("journey-workspace")
+    expect(workspace).toHaveAttribute("data-layout", "single-column")
+    const list = screen.getByRole("region", { name: "All journeys" })
+    const editor = within(workspace).getByRole("main")
+    expect(
+      list.compareDocumentPosition(editor) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+  }, 15_000)
+
   it("creates a draft with event, audience, absolute delay, image and route data", async () => {
     const user = userEvent.setup()
     let created: PushJourney | null = null
@@ -84,6 +144,13 @@ describe("journeys page", () => {
                   title: "Thanks",
                   body: "Your bonus is ready.",
                   imageUrl: "https://cdn.oknok.app/bonus.jpg",
+                  translations: {
+                    "tr-TR": {
+                      title: "Teşekkürler",
+                      body: "Bonusun hazır.",
+                      imageUrl: "https://cdn.oknok.app/bonus-tr.jpg",
+                    },
+                  },
                   data: { campaign: "purchase-thanks", route: "/menu" },
                 },
               ],
@@ -100,9 +167,12 @@ describe("journeys page", () => {
     expect(await screen.findByText("No journeys yet")).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "New journey" }))
     await user.type(screen.getByLabelText("Journey name"), "Purchase nurture")
-    await user.type(screen.getByLabelText("Entry event"), "purchase_completed")
+    await user.selectOptions(
+      screen.getByLabelText("Entry event"),
+      "purchase_completed"
+    )
     await user.selectOptions(screen.getByLabelText("Audience"), "has_event")
-    await user.type(
+    await user.selectOptions(
       screen.getByLabelText("Audience event"),
       "purchase_completed"
     )
@@ -119,6 +189,23 @@ describe("journeys page", () => {
       screen.getByLabelText("Step 1 image URL"),
       "https://cdn.oknok.app/bonus.jpg"
     )
+    await user.click(screen.getByRole("button", { name: "Add translation" }))
+    await user.type(
+      screen.getByLabelText("Step 1 translation 1 locale"),
+      "tr-TR"
+    )
+    await user.type(
+      screen.getByLabelText("Step 1 translation 1 title"),
+      "Teşekkürler"
+    )
+    await user.type(
+      screen.getByLabelText("Step 1 translation 1 message"),
+      "Bonusun hazır."
+    )
+    await user.type(
+      screen.getByLabelText("Step 1 translation 1 image URL"),
+      "https://cdn.oknok.app/bonus-tr.jpg"
+    )
     await user.type(screen.getByLabelText("Step 1 route"), "/menu")
     fireEvent.change(screen.getByLabelText("Step 1 data JSON"), {
       target: { value: '{"campaign":"purchase-thanks"}' },
@@ -127,6 +214,75 @@ describe("journeys page", () => {
 
     expect(await screen.findByText("Draft created")).toBeInTheDocument()
     expect(await screen.findByText("Purchase nurture")).toBeInTheDocument()
+  }, 15_000)
+
+  it("creates a complete localized journey directly from JSON", async () => {
+    const user = userEvent.setup()
+    let posted: unknown
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = urlOf(input)
+        const method = init?.method ?? "GET"
+        if (url.pathname.endsWith("/admin/push/journeys") && method === "GET") {
+          return json({ success: true, data: [] })
+        }
+        if (
+          url.pathname.endsWith("/admin/push/journeys") &&
+          method === "POST"
+        ) {
+          posted = JSON.parse(String(init?.body))
+          return json({ success: true, data: JOURNEY }, 201)
+        }
+        return json({ success: false, error: "NOT_FOUND" }, 404)
+      }
+    )
+
+    renderApp("/journeys")
+    await screen.findByText("No journeys yet")
+    await user.click(screen.getByRole("button", { name: "New journey" }))
+    await user.click(screen.getByRole("button", { name: "JSON" }))
+    fireEvent.change(screen.getByLabelText("Journey JSON"), {
+      target: {
+        value: JSON.stringify({
+          name: "OKNOK welcome",
+          definition: {
+            entryEvent: "user_created",
+            steps: [
+              {
+                id: "welcome",
+                offsetSeconds: 120,
+                title: "Welcome",
+                body: "Your first game is ready.",
+                translations: {
+                  tr: {
+                    title: "Hoş geldin",
+                    body: "İlk oyunun hazır.",
+                  },
+                },
+                data: { route: "/menu" },
+              },
+            ],
+          },
+        }),
+      },
+    })
+    await user.click(screen.getByRole("button", { name: "Create draft" }))
+
+    await screen.findByText("Draft created")
+    expect(posted).toMatchObject({
+      name: "OKNOK welcome",
+      definition: {
+        entryEvent: "user_created",
+        steps: [
+          {
+            offsetSeconds: 120,
+            translations: {
+              tr: { title: "Hoş geldin", body: "İlk oyunun hazır." },
+            },
+          },
+        ],
+      },
+    })
   })
 
   it("edits, publishes, pauses and resumes using explicit state actions", async () => {
@@ -238,10 +394,24 @@ describe("journeys page", () => {
 
     renderApp("/journeys")
     await screen.findByDisplayValue("Purchase nurture")
-    await user.clear(screen.getByLabelText("Step 1 ID"))
-    await user.type(screen.getByLabelText("Step 1 ID"), "updated-thank-you")
-    await user.clear(screen.getByLabelText("Step 1 title"))
-    await user.type(screen.getByLabelText("Step 1 title"), "Updated test title")
+    await user.click(screen.getByRole("button", { name: "JSON" }))
+    fireEvent.change(screen.getByLabelText("Journey JSON"), {
+      target: {
+        value: JSON.stringify({
+          name: JOURNEY.name,
+          definition: {
+            ...JOURNEY.draft,
+            steps: [
+              {
+                ...JOURNEY.draft.steps[0],
+                id: "updated-thank-you",
+                title: "Updated test title",
+              },
+            ],
+          },
+        }),
+      },
+    })
     await user.type(screen.getByLabelText("Test device"), "device-123")
     await user.click(screen.getByRole("button", { name: "Search devices" }))
     await user.click(await screen.findByRole("button", { name: /device-123/ }))
@@ -268,7 +438,7 @@ describe("journeys page", () => {
       json({ success: false, error: "INVALID_INPUT" }, 400)
     )
     await user.type(screen.getByLabelText("Journey name"), "Broken")
-    await user.type(screen.getByLabelText("Entry event"), "app_opened")
+    await user.selectOptions(screen.getByLabelText("Entry event"), "app_opened")
     await user.type(screen.getByLabelText("Step 1 title"), "Hello")
     await user.type(screen.getByLabelText("Step 1 message"), "World")
     await user.click(screen.getByRole("button", { name: "Create draft" }))

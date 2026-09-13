@@ -14,7 +14,13 @@ import { parseJsonObject, prettyJson } from "@/lib/json"
 import type { AdminCollectionInfo, CollectionDoc } from "@/lib/types"
 import { FieldCell, ImageLightbox, UsersActions } from "@/components/field-cell"
 import { JsonEditor } from "@/components/json-editor"
-import { EmptyNote, ErrorNote, LoadingRows, PageHeader, TableScroll } from "@/components/page"
+import {
+  EmptyNote,
+  ErrorNote,
+  LoadingRows,
+  PageHeader,
+  TableScroll,
+} from "@/components/page"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,6 +62,16 @@ import { Textarea } from "@/components/ui/textarea"
 
 const PAGE_LIMIT = 50
 const EMPTY_OBJECT = "{}"
+const USER_CONTEXT_FIELDS = [
+  "identifiers",
+  "device",
+  "properties",
+  "firstSeenIp",
+  "lastSeenIp",
+  "firstSeenAt",
+  "lastSeenAt",
+  "updatedAt",
+] as const
 
 function documentId(doc: CollectionDoc): string {
   return String(doc._id ?? "")
@@ -86,8 +102,29 @@ export function CollectionPage() {
     null
   )
 
-  const fields = collection?.fields ?? ["_id"]
   const isUsers = collection?.kind === "users" || name === "users"
+  const fields = useMemo(() => {
+    const declared = collection?.fields ?? ["_id"]
+    if (!isUsers) return declared
+
+    const available = new Set(declared)
+    for (const doc of docs ?? []) {
+      for (const key of Object.keys(doc)) available.add(key)
+    }
+
+    const prioritized = [
+      ...declared,
+      ...USER_CONTEXT_FIELDS.filter((field) => available.has(field)),
+    ]
+    return [
+      ...new Set([
+        ...prioritized,
+        ...Array.from(available).filter(
+          (field) => !prioritized.includes(field)
+        ),
+      ]),
+    ]
+  }, [collection?.fields, docs, isUsers])
   const [pageName, setPageName] = useState(name)
   if (name !== pageName) {
     setPageName(name)
@@ -340,7 +377,9 @@ export function CollectionPage() {
           <Button type="submit" variant="outline" size="sm">
             Apply filter
           </Button>
-          <span className="font-mono text-xs text-muted-foreground">{rangeLabel}</span>
+          <span className="font-mono text-xs text-muted-foreground">
+            {rangeLabel}
+          </span>
           <div className="ml-auto flex items-center gap-2">
             <Button
               type="button"
@@ -417,7 +456,9 @@ export function CollectionPage() {
                       <UsersActions
                         deviceId={String(doc.deviceId ?? "")}
                         onSendPush={(deviceId) => {
-                          navigate(`/push?deviceId=${encodeURIComponent(deviceId)}`)
+                          navigate(
+                            `/push?deviceId=${encodeURIComponent(deviceId)}`
+                          )
                         }}
                       />
                     </TableCell>
@@ -454,7 +495,11 @@ export function CollectionPage() {
             >
               Delete
             </Button>
-            <Button type="button" onClick={() => void saveEditor()} disabled={saving}>
+            <Button
+              type="button"
+              onClick={() => void saveEditor()}
+              disabled={saving}
+            >
               {saving ? <Spinner data-icon="inline-start" /> : null}
               Save
             </Button>
@@ -489,7 +534,9 @@ export function CollectionPage() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>New document</DialogTitle>
-            <DialogDescription>POST a JSON document to {name}.</DialogDescription>
+            <DialogDescription>
+              POST a JSON document to {name}.
+            </DialogDescription>
           </DialogHeader>
           <JsonEditor
             id="new-document-json"
@@ -505,7 +552,11 @@ export function CollectionPage() {
             >
               Cancel
             </Button>
-            <Button type="button" onClick={() => void createDoc()} disabled={creating}>
+            <Button
+              type="button"
+              onClick={() => void createDoc()}
+              disabled={creating}
+            >
               {creating ? <Spinner data-icon="inline-start" /> : null}
               Create
             </Button>
